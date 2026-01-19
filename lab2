@@ -1,0 +1,211 @@
+Хорошо, сделаю попроще, с минимумом сложных конструкций и с комментариями на русском.
+
+---
+
+Лабораторная работа №2 (упрощённая версия)
+
+---
+
+5.1. Деление двух чисел (частное и остаток)
+
+```assembly
+%include "io.inc"       ; подключаем макросы ввода-вывода SASM
+
+section .data
+    a dd 17             ; число a
+    b dd 5              ; число b
+
+section .text
+global CMAIN
+CMAIN:
+    mov eax, [a]        ; загружаем a в eax
+    mov ebx, [b]        ; загружаем b в ebx
+    cdq                 ; расширяем eax в edx:eax
+    idiv ebx            ; делим edx:eax на ebx
+    
+    ; результат:
+    ; eax = частное
+    ; edx = остаток
+    
+    PRINT_DEC 4, eax    ; выводим частное
+    NEWLINE
+    PRINT_DEC 4, edx    ; выводим остаток
+    NEWLINE
+    
+    xor eax, eax        ; возвращаем 0
+    ret
+```
+
+---
+
+5.2. Вычисление y(x) = ax² + bx + c (ввод с клавиатуры)
+
+```assembly
+%include "io.inc"
+
+section .bss
+    a resd 1
+    x resd 1
+    b resd 1
+    c resd 1
+
+section .text
+global CMAIN
+CMAIN:
+    ; Вводим a
+    PRINT_STRING "Введите a: "
+    GET_DEC 4, [a]
+    
+    ; Вводим x
+    PRINT_STRING "Введите x: "
+    GET_DEC 4, [x]
+    
+    ; Вводим b
+    PRINT_STRING "Введите b: "
+    GET_DEC 4, [b]
+    
+    ; Вводим c
+    PRINT_STRING "Введите c: "
+    GET_DEC 4, [c]
+    
+    ; Вычисляем ax²
+    mov eax, [a]
+    imul eax, [x]       ; eax = a * x
+    imul eax, [x]       ; eax = a * x * x
+    
+    ; Вычисляем bx
+    mov ebx, [b]
+    imul ebx, [x]       ; ebx = b * x
+    
+    ; Складываем: ax² + bx
+    add eax, ebx
+    
+    ; Прибавляем c
+    add eax, [c]
+    
+    ; Выводим результат
+    PRINT_STRING "y(x) = "
+    PRINT_DEC 4, eax
+    NEWLINE
+    
+    xor eax, eax
+    ret
+```
+
+---
+
+5.3. Проверка чётности числа
+
+```assembly
+%include "io.inc"
+
+section .text
+global CMAIN
+CMAIN:
+    PRINT_STRING "Введите число: "
+    GET_DEC 4, eax      ; число в eax
+    
+    and eax, 1          ; смотрим на младший бит
+    jz even             ; если 0 — чётное
+    
+    ; нечётное
+    PRINT_DEC 4, 0
+    jmp end_check
+    
+even:
+    PRINT_DEC 4, 1
+    
+end_check:
+    NEWLINE
+    xor eax, eax
+    ret
+```
+
+---
+
+5.4. Перевод байтов в килобайты
+
+```assembly
+%include "io.inc"
+
+section .text
+global CMAIN
+CMAIN:
+    PRINT_STRING "Введите размер в байтах: "
+    GET_DEC 4, eax      ; размер в eax
+    
+    ; 1 КБ = 1024 байта
+    mov ebx, 1024
+    cdq                 ; расширяем eax -> edx:eax
+    idiv ebx            ; делим на 1024
+    
+    ; eax = килобайты, edx = остаток байтов
+    
+    PRINT_STRING "Килобайт: "
+    PRINT_DEC 4, eax
+    NEWLINE
+    
+    xor eax, eax
+    ret
+```
+
+---
+
+5.5. Формирование цвета из RGB
+
+```assembly
+%include "io.inc"
+
+section .bss
+    r resd 1
+    g resd 1
+    b resd 1
+
+section .text
+global CMAIN
+CMAIN:
+    ; Вводим R
+    PRINT_STRING "R (0-255): "
+    GET_DEC 4, [r]
+    
+    ; Вводим G
+    PRINT_STRING "G (0-255): "
+    GET_DEC 4, [g]
+    
+    ; Вводим B
+    PRINT_STRING "B (0-255): "
+    GET_DEC 4, [b]
+    
+    ; Формируем число: R << 16 | G << 8 | B
+    mov eax, [r]
+    shl eax, 16         ; сдвигаем R на 16 бит влево
+    
+    mov ebx, [g]
+    shl ebx, 8          ; сдвигаем G на 8 бит влево
+    
+    or eax, ebx         ; объединяем R и G
+    or eax, [b]         ; добавляем B
+    
+    ; Выводим результат в HEX
+    PRINT_STRING "Цвет в HEX: 0x"
+    PRINT_HEX 4, eax
+    NEWLINE
+    
+    xor eax, eax
+    ret
+```
+
+---
+
+Ответы на контрольные вопросы (кратко):
+
+8.1. mov — копирует данные между регистрами, памятью, константами.
+8.2. add, sub, mul, imul, div, idiv — сложение, вычитание, умножение, деление.
+8.3. shl, shr — сдвиг влево/вправо для умножения/деления на степени двойки.
+8.4. RAX — 8 байт, EAX — 4 байта, AX — 2 байта, AH/AL — 1 байт.
+8.5. xor reg, reg или mov reg, 0.
+8.6. Нет, AX — 16-битный, а dword — 32 бита.
+
+---
+
+Хочешь, чтобы я ещё что-то упростил или добавил больше пояснений?
