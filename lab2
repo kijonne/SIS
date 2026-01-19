@@ -209,3 +209,196 @@ CMAIN:
 ---
 
 Хочешь, чтобы я ещё что-то упростил или добавил больше пояснений?
+
+
+
+
+
+
+
+
+Хорошо, сделаю с вводом через макросы GET_DEC и выводом через PRINT_DEC, но по-простому, без сложных конструкций:
+
+---
+
+1. Деление чисел
+
+```assembly
+%include "io.inc"
+
+section .data
+    a dd 0
+    b dd 0
+
+section .text
+global main
+main:
+    ; Ввод a
+    GET_DEC 4, [a]
+    
+    ; Ввод b
+    GET_DEC 4, [b]
+    
+    ; Загружаем в регистры
+    mov eax, [a]
+    mov ebx, [b]
+    
+    ; Делим
+    xor edx, edx
+    div ebx
+    
+    ; Вывод частного
+    PRINT_DEC 4, eax
+    
+    ; Вывод остатка
+    PRINT_CHAR ' '
+    PRINT_DEC 4, edx
+    
+    xor eax, eax
+    ret
+```
+
+---
+
+2. y = ax² + bx + c
+
+```assembly
+%include "io.inc"
+
+section .data
+    a dd 0
+    x dd 0
+    b dd 0
+    c dd 0
+
+section .text
+global main
+main:
+    ; Ввод a, x, b, c
+    GET_DEC 4, [a]
+    GET_DEC 4, [x]
+    GET_DEC 4, [b]
+    GET_DEC 4, [c]
+    
+    ; Считаем ax²
+    mov eax, [a]
+    imul eax, [x]
+    imul eax, [x]
+    
+    ; Считаем bx
+    mov ebx, [b]
+    imul ebx, [x]
+    
+    ; Складываем
+    add eax, ebx
+    add eax, [c]
+    
+    ; Вывод
+    PRINT_DEC 4, eax
+    
+    xor eax, eax
+    ret
+```
+
+---
+
+3. Чётное/нечётное
+
+```assembly
+%include "io.inc"
+
+section .text
+global main
+main:
+    ; Ввод числа
+    GET_DEC 4, eax
+    
+    ; Проверка
+    and eax, 1
+    
+    cmp eax, 0
+    je even_num
+    
+    ; Нечётное
+    PRINT_DEC 4, 0
+    jmp end
+    
+even_num:
+    ; Чётное
+    PRINT_DEC 4, 1
+    
+end:
+    xor eax, eax
+    ret
+```
+
+---
+
+4. Байты → Килобайты
+
+```assembly
+%include "io.inc"
+
+section .data
+    kilo dd 1024
+
+section .text
+global main
+main:
+    ; Ввод байтов
+    GET_DEC 4, eax
+    
+    ; Делим на 1024
+    xor edx, edx
+    div dword [kilo]
+    
+    ; Вывод
+    PRINT_DEC 4, eax
+    
+    xor eax, eax
+    ret
+```
+
+---
+
+5. RGB в число
+
+```assembly
+%include "io.inc"
+
+section .text
+global main
+main:
+    ; Ввод R
+    GET_DEC 4, eax
+    
+    ; Ввод G
+    GET_DEC 4, ebx
+    
+    ; Ввод B
+    GET_DEC 4, ecx
+    
+    ; Собираем
+    shl eax, 16
+    shl ebx, 8
+    or eax, ebx
+    or eax, ecx
+    
+    ; Вывод в HEX
+    PRINT_HEX 4, eax
+    
+    xor eax, eax
+    ret
+```
+
+---
+
+Как пользоваться:
+
+1. Открой SASM
+2. Вставь код для нужного задания
+3. Нажми F5
+4. Вводи числа по одному, нажимай Enter
+5. Смотри результат в окне вывода
+
+Если всё равно не работает — покажи, какая именно ошибка выходит.
