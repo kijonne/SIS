@@ -1,0 +1,228 @@
+Хорошо, давай по шагам. Я напишу простые и понятные программы для каждого задания с комментариями.
+Мы будем писать для SASM, чтобы просто запустить и увидеть результат.
+
+---
+
+Задание 5.1: Проверить, равны ли два числа
+
+```asm
+section .data
+    a dd 10           ; первое число
+    b dd 10           ; второе число
+    msg_equal db 'equal', 10, 0      ; сообщение если равны
+    msg_not db 'not equal', 10, 0    ; сообщение если не равны
+
+section .text
+    global main
+    extern printf     ; будем использовать printf для вывода
+
+main:
+    mov eax, [a]      ; загружаем a в регистр
+    mov ebx, [b]      ; загружаем b в регистр
+    cmp eax, ebx      ; сравниваем
+    je equal          ; если равны, прыгаем на метку equal
+    jmp not_equal     ; если не равны, прыгаем на not_equal
+
+equal:
+    push msg_equal    ; кладём в стек адрес строки "equal"
+    call printf       ; выводим
+    add esp, 4        ; чистим стек
+    jmp end           ; прыгаем в конец
+
+not_equal:
+    push msg_not      ; кладём в стек адрес строки "not equal"
+    call printf
+    add esp, 4
+
+end:
+    ret               ; конец программы
+```
+
+---
+
+Задание 5.2: Проверить, лежит ли число между 4 и 14
+
+```asm
+section .data
+    x dd 8
+    msg_in db 'within range (4..14)', 10, 0
+    msg_out db 'out of range', 10, 0
+
+section .text
+    global main
+    extern printf
+
+main:
+    mov eax, [x]      ; загружаем число
+    cmp eax, 4        ; сравниваем с 4
+    jle out_of_range  ; если меньше или равно 4 → out
+    cmp eax, 14       ; сравниваем с 14
+    jge out_of_range  ; если больше или равно 14 → out
+
+    ; если дошли сюда, значит число в диапазоне
+    push msg_in
+    call printf
+    add esp, 4
+    jmp end
+
+out_of_range:
+    push msg_out
+    call printf
+    add esp, 4
+
+end:
+    ret
+```
+
+---
+
+Задание 5.3: Найти наибольшее из трёх чисел
+
+```asm
+section .data
+    a dd 15
+    b dd 7
+    c dd 22
+    format db 'max = %d', 10, 0   ; формат вывода числа
+
+section .text
+    global main
+    extern printf
+
+main:
+    mov eax, [a]      ; предполагаем, что a — наибольшее
+    mov ebx, [b]
+    mov ecx, [c]
+
+    cmp eax, ebx      ; сравниваем a и b
+    jge compare_c     ; если a >= b, идём дальше
+    mov eax, ebx      ; если b больше, кладём b в eax
+
+compare_c:
+    cmp eax, ecx      ; сравниваем текущий максимум с c
+    jge print_result  ; если максимум >= c, выводим
+    mov eax, ecx      ; если c больше, кладём c в eax
+
+print_result:
+    push eax          ; кладём число в стек
+    push format       ; кладём строку формата
+    call printf
+    add esp, 8        ; чистим стек (2 аргумента)
+
+    ret
+```
+
+---
+
+Задание 5.4: Вычислить функцию y(x)
+
+Формула:
+
+· если x < -10 → y = a * x²
+· если -10 ≤ x < 10 → y = a * |x|
+· если x ≥ 10 → y = a - x
+
+```asm
+section .data
+    x dd -15
+    a dd 3
+    format db 'y = %d', 10, 0
+
+section .text
+    global main
+    extern printf
+
+main:
+    mov eax, [x]
+    mov ebx, [a]
+
+    cmp eax, -10
+    jl case1         ; x < -10
+    cmp eax, 10
+    jl case2         ; -10 ≤ x < 10
+    jmp case3        ; x ≥ 10
+
+case1:               ; y = a * x²
+    imul eax, eax    ; eax = x²
+    imul eax, ebx    ; eax = a * x²
+    jmp print
+
+case2:               ; y = a * |x|
+    cmp eax, 0
+    jge positive
+    neg eax          ; если отрицательное, делаем положительное
+positive:
+    imul eax, ebx    ; a * |x|
+    jmp print
+
+case3:               ; y = a - x
+    mov eax, ebx     ; eax = a
+    sub eax, [x]     ; eax = a - x
+
+print:
+    push eax
+    push format
+    call printf
+    add esp, 8
+    ret
+```
+
+---
+
+Задание 5.5: Программа расчёта сдачи
+
+```asm
+section .data
+    price dd 150      ; сумма покупки
+    paid dd 200       ; внесённая сумма
+    msg_ok db 'Payment successful', 10, 0
+    msg_change db 'Change: %d', 10, 0
+    msg_need db 'Need more: %d', 10, 0
+
+section .text
+    global main
+    extern printf
+
+main:
+    mov eax, [price]
+    mov ebx, [paid]
+
+    cmp ebx, eax      ; сравниваем оплату и цену
+    jl not_enough     ; если оплата < цены → недостаточно
+    je exact          ; если оплата == цены → без сдачи
+
+    ; если больше → даём сдачу
+    sub ebx, eax      ; ebx = paid - price
+    push ebx
+    push msg_change
+    call printf
+    add esp, 8
+    jmp end
+
+not_enough:
+    sub eax, ebx      ; eax = price - paid
+    push eax
+    push msg_need
+    call printf
+    add esp, 8
+    jmp end
+
+exact:
+    push msg_ok
+    call printf
+    add esp, 4
+
+end:
+    ret
+```
+
+---
+
+Как использовать:
+
+1. Открой SASM.
+2. Вставь код в новый файл.
+3. Нажми F5 чтобы скомпилировать и запустить.
+4. Результат увидишь в консоли внизу.
+
+Можешь менять числа в секции .data и перезапускать, чтобы проверить разные случаи.
