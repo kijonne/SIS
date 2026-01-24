@@ -1,0 +1,105 @@
+%include "io64.inc"
+
+section .data
+    a dd 2
+    x dd -5  ; Пример: измените для теста (-15: a*x^2=450, -5: a*|x|=10, 15: a-x=-13)
+    y dd 0
+
+section .text
+    global main
+
+main:
+    push rbp
+    mov rbp, rsp
+
+    mov eax, [x]
+    cmp eax, -10
+    jl less_minus10     ; x < -10
+    cmp eax, 10
+    jge ge_10           ; x >= 10
+
+    ; -10 <= x < 10: y = a * |x|
+    cdq                 ; sign extend eax to edx:eax
+    xor eax, edx
+    sub eax, edx        ; abs(eax)
+    imul eax, [a]       ; * a
+    jmp store_y
+
+less_minus10:
+    ; x < -10: y = a * x^2
+    imul eax, eax       ; x^2
+    imul eax, [a]       ; * a
+    jmp store_y
+
+ge_10:
+    ; x >= 10: y = a - x
+    mov eax, [a]
+    sub eax, [x]
+
+store_y:
+    mov [y], eax
+    PRINT_DEC 4, [y]
+    NEWLINE
+
+    pop rbp
+    ret
+
+
+
+
+
+
+
+
+%include "io64.inc"
+
+section .data
+    purchase dd 0
+    paid dd 0
+    msg_success db "successful payment", 0
+    msg_change db "change: ", 0
+    msg_insufficient db "insufficient, need more: ", 0
+    msg_prompt_purchase db "purchase amount: ", 0
+    msg_prompt_paid db "paid amount: ", 0
+
+section .text
+    global main
+
+main:
+    push rbp
+    mov rbp, rsp
+
+    PRINT_STRING msg_prompt_purchase
+    GET_DEC 4, [purchase]
+
+    PRINT_STRING msg_prompt_paid
+    GET_DEC 4, [paid]
+
+    mov eax, [paid]
+    mov ebx, [purchase]
+    cmp eax, ebx
+    jl insufficient
+
+    je success
+
+    ; paid > purchase: change
+    sub eax, ebx
+    PRINT_STRING msg_change
+    PRINT_DEC 4, eax
+    NEWLINE
+    jmp end
+
+success:
+    PRINT_STRING msg_success
+    NEWLINE
+    jmp end
+
+insufficient:
+    sub ebx, eax  ; need more
+    PRINT_STRING msg_insufficient
+    PRINT_DEC 4, ebx
+    NEWLINE
+
+end:
+    pop rbp
+    ret
