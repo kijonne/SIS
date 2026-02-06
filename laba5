@@ -1,0 +1,82 @@
+; Лабораторная работа №5
+; Вычисление гипотенузы прямоугольного треугольника
+; С вводом через scanf, выводом через printf и MessageBox
+; 64-битный режим, Windows ABI
+
+; Подключаемые внешние функции
+extern printf
+extern scanf
+extern MessageBoxA
+extern ExitProcess
+
+section .data
+    ; === ЗАДАНИЕ 5.1: ДАННЫЕ ДЛЯ ВВОДА ===
+    format_in    db "%lf %lf", 0           ; формат scanf для двух double
+    a            dq 0.0                    ; первый катет
+    b            dq 0.0                    ; второй катет
+    
+    ; === ЗАДАНИЕ 5.2-5.3: ДАННЫЕ ДЛЯ ВЫВОДА ===
+    c            dq 0.0                    ; гипотенуза (вычисленная)
+    format_out   db "Гипотенуза = %.2f", 10, 0 ; формат printf
+    
+    ; === ЗАДАНИЕ 5.4: ДАННЫЕ ДЛЯ MessageBox ===
+    caption      db "Вопрос", 0
+    message      db "Завершить программу?", 0
+    MB_YESNO     equ 0x00000004            ; кнопки Да/Нет
+    IDYES        equ 6                     ; код кнопки "Да"
+
+section .text
+global main
+
+main:
+    ; Выравнивание стека для Windows ABI
+    sub rsp, 40
+
+input_loop:
+    ; === ЗАДАНИЕ 5.1: СЧИТЫВАНИЕ ДВУХ КАТЕТОВ ===
+    ; scanf("%lf %lf", &a, &b)
+    lea rcx, [format_in]  ; 1-й параметр: строка формата
+    lea rdx, [a]          ; 2-й параметр: адрес a
+    lea r8, [b]           ; 3-й параметр: адрес b
+    call scanf
+    
+    ; === ЗАДАНИЕ 5.2: ВЫЧИСЛЕНИЕ ГИПОТЕНУЗЫ ===
+    ; Вычисление по формуле c = √(a² + b²) через сопроцессор
+    fld qword [a]         ; ST(0) = a
+    fmul st0, st0         ; ST(0) = a²
+    
+    fld qword [b]         ; ST(0) = b, ST(1) = a²
+    fmul st0, st0         ; ST(0) = b²
+    faddp st1, st0        ; ST(0) = a² + b²
+    
+    fsqrt                 ; ST(0) = √(a² + b²)
+    fstp qword [c]        ; сохраняем в c, очищаем стек сопроцессора
+    
+    ; === ЗАДАНИЕ 5.3: ВЫВОД РЕЗУЛЬТАТА ЧЕРЕЗ printf ===
+    ; printf("Гипотенуза = %.2f\n", c)
+    ; Для variadic-функций вещественные передаем через целочисленные регистры
+    movq xmm0, qword [c]  ; помещаем double в xmm0
+    movq rdx, xmm0        ; передаем через RDX (второй параметр)
+    lea rcx, [format_out] ; 1-й параметр: строка формата
+    call printf
+    
+    ; === ЗАДАНИЕ 5.4: MessageBox С ПРЕДЛОЖЕНИЕМ ПОВТОРИТЬ ===
+    ; MessageBoxA(NULL, "Завершить программу?", "Вопрос", MB_YESNO)
+    sub rsp, 32           ; дополнительная тень для MessageBoxA
+    mov r9, MB_YESNO      ; 4-й параметр: тип окна
+    lea r8, [caption]     ; 3-й параметр: заголовок
+    lea rdx, [message]    ; 2-й параметр: текст сообщения
+    xor rcx, rcx          ; 1-й параметр: hWnd = NULL
+    call MessageBoxA
+    add rsp, 32           ; очищаем дополнительную тень
+    
+    ; Проверяем, что нажал пользователь
+    cmp rax, IDYES        ; сравнение с кодом кнопки "Да"
+    je exit_program       ; если "Да" - завершаем программу
+    jmp input_loop        ; если "Нет" - повторяем ввод
+
+exit_program:
+    ; Завершение программы
+    add rsp, 40           ; восстанавливаем стек
+    xor rcx, rcx          ; код возврата 0
+    call ExitProcess
