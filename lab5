@@ -1,0 +1,136 @@
+Хорошо, разделяю на отдельные задания с объяснениями и кодом для каждого.
+
+---
+
+Задание 5.1: Считывание двух катетов через scanf
+
+Цель:
+Считать два вещественных числа типа double (катеты) через scanf.
+
+Код:
+
+```assembly
+section .data
+    format_in db "%lf %lf", 0
+    a dq 0.0
+    b dq 0.0
+
+section .text
+global main
+extern scanf
+
+main:
+    sub rsp, 40          ; выравнивание стека для Windows ABI
+
+input:
+    ; Вызов scanf("%lf %lf", &a, &b)
+    lea rcx, [format_in] ; первый аргумент: формат
+    lea rdx, [a]         ; второй: адрес a
+    lea r8, [b]          ; третий: адрес b
+    call scanf
+
+    ; После ввода значения лежат в [a] и [b]
+```
+
+---
+
+Задание 5.2: Вычисление гипотенузы через сопроцессор
+
+Цель:
+Вычислить гипотенузу по формуле c = √(a² + b²) с использованием математического сопроцессора.
+
+Код:
+
+```assembly
+section .data
+    ; ... (то же, что выше)
+    c dq 0.0
+
+section .text
+    ; ... (после ввода)
+
+    ; Загружаем a в сопроцессор
+    fld qword [a]     ; ST(0) = a
+    fmul st0, st0     ; ST(0) = a²
+
+    ; Загружаем b в сопроцессор
+    fld qword [b]     ; ST(0) = b, ST(1) = a²
+    fmul st0, st0     ; ST(0) = b²
+    faddp st1, st0    ; ST(0) = a² + b²
+
+    ; Извлекаем квадратный корень
+    fsqrt             ; ST(0) = √(a² + b²)
+    fstp qword [c]    ; сохраняем результат в c, очищаем стек сопроцессора
+```
+
+---
+
+Задание 5.3: Вывод результата через printf
+
+Цель:
+Вывести вычисленную гипотенузу на экран через printf.
+
+Важно:
+В 64-разрядной Windows вещественные аргументы для printf передаются не через XMM, а через основные регистры (RCX, RDX, R8, R9), но сам double должен быть передан как целое 64-битное значение, поэтому используем movq из XMM.
+
+Код:
+
+```assembly
+section .data
+    format_out db "Гипотенуза = %.2f", 10, 0
+
+section .text
+extern printf
+
+    ; ... (после вычисления c)
+
+    ; Подготовка вызова printf
+    movq xmm0, qword [c]   ; помещаем double в xmm0
+    movq rdx, xmm0         ; передаем через RDX (второй аргумент)
+    lea rcx, [format_out]  ; первый аргумент: строка формата
+    call printf
+```
+
+---
+
+Задание 5.4: Вывод MessageBox с предложением повторить
+
+Цель:
+После вывода гипотенузы показать окно MessageBox с вопросом: завершить программу или повторить ввод.
+
+Код:
+
+```assembly
+section .data
+    caption db "Вопрос", 0
+    message db "Завершить программу?", 0
+    MB_YESNO equ 0x00000004
+    IDYES equ 6
+
+section .text
+extern MessageBoxA
+extern ExitProcess
+
+    ; ... (после printf)
+
+ask:
+    ; Вызов MessageBoxA
+    sub rsp, 32          ; тень для MessageBoxA
+    mov r9, MB_YESNO     ; тип окна (YES/NO)
+    lea r8, [caption]    ; заголовок
+    lea rdx, [message]   ; текст сообщения
+    xor rcx, rcx         ; hWnd = NULL
+    call MessageBoxA
+
+    ; Проверка ответа
+    cmp rax, IDYES
+    je exit_program      ; если нажал YES — выходим
+    jmp input            ; если NO — повторяем ввод
+
+exit_program:
+    ; Завершение программы
+    xor rcx, rcx
+    call ExitProcess
+```
+
+---
