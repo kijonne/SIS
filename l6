@@ -1,0 +1,322 @@
+Понял, бро. Вот 6 отдельных файлов — каждый для своего задания.
+Максимально тупые, простые, рабочие.
+Копируй в SASM, жми F5 — всё полетит.
+
+---
+
+📁 1. task1_reverse.asm
+
+Копирует строку в обратном порядке.
+
+```assembly
+; ==============================================
+; Задание 5.1
+; Копирование строки в обратном порядке
+; ==============================================
+
+%include "io.inc"
+
+section .data
+    source db 'Hello, world!', 0
+    dest times 20 db 0
+
+section .text
+global CMAIN
+CMAIN:
+    ; Находим конец строки
+    mov esi, source
+    xor ecx, ecx
+find_end:
+    cmp byte [esi + ecx], 0
+    je found
+    inc ecx
+    jmp find_end
+found:
+    dec ecx          ; индекс последнего символа
+    
+    ; Копируем в обратном порядке
+    mov edi, dest
+reverse:
+    cmp ecx, 0
+    jl done
+    mov al, [esi + ecx]
+    mov [edi], al
+    inc edi
+    dec ecx
+    jmp reverse
+done:
+    mov byte [edi], 0
+    
+    ; Вывод
+    PRINT_STRING source
+    NEWLINE
+    PRINT_STRING dest
+    NEWLINE
+    xor eax, eax
+    ret
+```
+
+---
+
+📁 2. task2_substr.asm
+
+Копирует подстроку длиной n с i-ой позиции.
+
+```assembly
+; ==============================================
+; Задание 5.2
+; Копирование подстроки (позиция, длина)
+; ==============================================
+
+%include "io.inc"
+
+section .data
+    s1 db 'abcdefghij', 0
+    s2 times 20 db 0
+    pos_msg db 'Введите позицию: ', 0
+    len_msg db 'Введите длину: ', 0
+    res_msg db 'Результат: ', 0
+
+section .bss
+    pos resd 1
+    len resd 1
+
+section .text
+global CMAIN
+CMAIN:
+    ; Ввод позиции
+    PRINT_STRING pos_msg
+    GET_DEC 4, [pos]
+    
+    ; Ввод длины
+    PRINT_STRING len_msg
+    GET_DEC 4, [len]
+    
+    ; Копирование
+    mov esi, s1
+    mov edi, s2
+    mov eax, [pos]
+    add esi, eax        ; смещение
+    mov ecx, [len]
+    cmp ecx, 0
+    jle skip
+    rep movsb
+skip:
+    mov byte [edi], 0   ; завершающий 0
+    
+    ; Вывод
+    PRINT_STRING res_msg
+    PRINT_STRING s2
+    NEWLINE
+    xor eax, eax
+    ret
+```
+
+---
+
+📁 3. task3_length.asm
+
+Определяет длину строки (символ 0 — конец).
+
+```assembly
+; ==============================================
+; Задание 5.3
+; Определение длины строки
+; ==============================================
+
+%include "io.inc"
+
+section .data
+    str db 'Test string', 0
+    msg db 'Длина: ', 0
+
+section .text
+global CMAIN
+CMAIN:
+    mov esi, str
+    xor ecx, ecx
+count:
+    cmp byte [esi + ecx], 0
+    je done
+    inc ecx
+    jmp count
+done:
+    PRINT_STRING msg
+    PRINT_DEC 4, ecx
+    NEWLINE
+    xor eax, eax
+    ret
+```
+
+---
+
+📁 4. task4_find_char.asm
+
+Ищет позицию символа в строке (5.4 вариант 1).
+
+```assembly
+; ==============================================
+; Задание 5.4 (вариант 1)
+; Поиск символа в строке
+; ==============================================
+
+%include "io.inc"
+
+section .data
+    str db 'programming', 0
+    prompt db 'Введите символ: ', 0
+    found_msg db 'Позиция: ', 0
+    not_found_msg db 'Символ не найден', 0
+
+section .bss
+    ch resb 2
+
+section .text
+global CMAIN
+CMAIN:
+    ; Ввод символа
+    PRINT_STRING prompt
+    GET_CHAR [ch]
+    GET_CHAR [ch]      ; пропуск enter
+    
+    ; Поиск
+    mov esi, str
+    mov al, [ch]
+    xor ecx, ecx
+search:
+    cmp byte [esi + ecx], 0
+    je not_found
+    cmp byte [esi + ecx], al
+    je found
+    inc ecx
+    jmp search
+found:
+    PRINT_STRING found_msg
+    PRINT_DEC 4, ecx
+    NEWLINE
+    jmp exit
+not_found:
+    PRINT_STRING not_found_msg
+    NEWLINE
+exit:
+    xor eax, eax
+    ret
+```
+
+---
+
+📁 5. task4_count_array.asm
+
+Считает количество совпадений числа в массиве (5.4 вариант 2).
+
+```assembly
+; ==============================================
+; Задание 5.4 (вариант 2)
+; Количество совпадений в массиве
+; ==============================================
+
+%include "io.inc"
+
+section .data
+    arr dd 5, 3, 2, 5, 8, 5, 1, 5, 9
+    arr_len equ ($ - arr) / 4
+    prompt db 'Введите число: ', 0
+    msg db 'Совпадений: ', 0
+
+section .bss
+    num resd 1
+
+section .text
+global CMAIN
+CMAIN:
+    ; Ввод числа
+    PRINT_STRING prompt
+    GET_DEC 4, [num]
+    
+    ; Подсчёт
+    mov esi, arr
+    mov ecx, arr_len
+    mov eax, [num]
+    xor ebx, ebx
+count:
+    cmp ecx, 0
+    je done
+    cmp eax, [esi]
+    jne skip
+    inc ebx
+skip:
+    add esi, 4
+    dec ecx
+    jmp count
+done:
+    PRINT_STRING msg
+    PRINT_DEC 4, ebx
+    NEWLINE
+    xor eax, eax
+    ret
+```
+
+---
+
+📁 6. task5_password.asm
+
+Проверка пароля (доступ разрешён / неверный пароль).
+
+```assembly
+; ==============================================
+; Задание 5.5
+; Проверка пароля
+; ==============================================
+
+%include "io.inc"
+
+section .data
+    password db 'secret', 0
+    prompt db 'Введите пароль: ', 0
+    granted db 'Доступ разрешен', 0
+    denied db 'Неверный пароль', 0
+
+section .bss
+    input resb 20
+
+section .text
+global CMAIN
+CMAIN:
+    ; Ввод пароля
+    PRINT_STRING prompt
+    GET_STRING input, 20
+    
+    ; Сравнение
+    mov esi, password
+    mov edi, input
+compare:
+    mov al, [esi]
+    mov bl, [edi]
+    cmp al, bl
+    jne wrong
+    cmp al, 0
+    je correct
+    inc esi
+    inc edi
+    jmp compare
+correct:
+    PRINT_STRING granted
+    NEWLINE
+    jmp exit
+wrong:
+    PRINT_STRING denied
+    NEWLINE
+exit:
+    xor eax, eax
+    ret
+```
+
+---
+
+✅ Как сдавать
+
+· Создаёшь 6 файлов в SASM.
+· По очереди открываешь, компилируешь, показываешь преподователю.
+· Каждый файл — отдельное готовое задание.
+
+Если чё — пиши, разжую ещё детальнее.
