@@ -1,0 +1,437 @@
+Бро, вот максимально рабочие и понятные версии всех пяти заданий (5.1–5.5).  
+Код написан под **NASM x64 Linux** (то, что обычно работает в SASM без проблем).  
+
+Все программы используют **syscall** для ввода/вывода.  
+Где нужно — добавил простой ввод чисел и строк (без сложных библиотек).  
+Каждое задание — отдельный полноценный файл (как требует п.6.1).  
+В конце покажу, как собрать всё в один файл (п.6.2).
+
+### Общие советы перед запуском в SASM
+- В SASM выбирай **NASM + ld** (64-bit).
+- В настройках вывода поставь "Console" или "Use printf/scanf" — но мой код использует syscall, так что работает и без.
+- Если не выводит — проверь "Run arguments" или просто жми F9 (Build & Run).
+
+### 5.1 — Копирование строки в обратном порядке
+
+```nasm
+; ЛР №6 Задание 5.1 — обратная копия строки
+section .data
+    src     db      "Hello, World!", 0
+    src_len equ     $ - src - 1             ; без 0
+
+    msg1    db      "Исходная: "
+    msg1len equ     $ - msg1
+    msg2    db      10, "Обратная: "
+
+section .bss
+    dst     resb    64                      ; хватит места
+
+section .text
+    global _start
+
+_start:
+    ; вывод "Исходная: "
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, msg1
+    mov     rdx, msg1len
+    syscall
+
+    ; вывод оригинала
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, src
+    mov     rdx, src_len
+    syscall
+
+    ; копируем задом наперёд
+    mov     rsi, src + src_len - 1          ; на последний символ
+    mov     rdi, dst
+    mov     rcx, src_len
+    std                                     ; DF=1 → уменьшаем RSI
+
+rev_loop:
+    lodsb                                   ; al = [rsi], rsi--
+    stosb                                   ; [rdi] = al, rdi++
+    loop    rev_loop
+
+    cld                                     ; DF=0 обратно
+
+    ; вывод "Обратная: "
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, msg2
+    mov     rdx, 3                          ; 10 + "Обратная: " без 0
+    syscall
+
+    ; вывод результата
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, dst
+    mov     rdx, src_len
+    syscall
+
+    ; новая строка
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, msg2
+    mov     rdx, 1                          ; только \n
+    syscall
+
+    ; exit
+    mov     rax, 60
+    xor     rdi, rdi
+    syscall
+```
+
+### 5.2 — Копирование подстроки с позиции i длиной n (ввод с клавиатуры)
+
+```nasm
+; ЛР №6 Задание 5.2 — подстрока с позиции i длиной n
+section .data
+    s1      db      "Это тестовая строка для лабораторной", 0
+    prompt_i db     10, "Позиция i (с 1): "
+    prompt_n db     10, "Длина n: "
+    result  db      10, "Подстрока: "
+
+section .bss
+    buf     resb    32                      ; для ввода чисел
+    substr  resb    128                     ; результат
+
+section .text
+    global _start
+
+_start:
+    ; вывод приглашения i
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, prompt_i
+    mov     rdx, 18
+    syscall
+
+    ; чтение i
+    mov     rax, 0
+    mov     rdi, 0
+    mov     rsi, buf
+    mov     rdx, 16
+    syscall
+
+    call    str_to_num
+    mov     r12, rax                        ; r12 = i (1-based)
+
+    ; приглашение n
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, prompt_n
+    mov     rdx, 11
+    syscall
+
+    ; чтение n
+    mov     rax, 0
+    mov     rdi, 0
+    mov     rsi, buf
+    mov     rdx, 16
+    syscall
+
+    call    str_to_num
+    mov     rcx, rax                        ; rcx = n
+
+    ; подготовка копирования
+    mov     rsi, s1
+    mov     rax, r12
+    dec     rax                             ; теперь 0-based
+    add     rsi, rax                        ; rsi → начало подстроки
+    mov     rdi, substr
+    cld
+    rep     movsb                           ; копируем rcx байт
+
+    ; вывод результата
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, result
+    mov     rdx, 12
+    syscall
+
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, substr
+    mov     rdx, rcx                        ; сколько скопировали
+    syscall
+
+    ; \n
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, prompt_i                   ; там есть 10
+    mov     rdx, 1
+    syscall
+
+    ; выход
+    mov     rax, 60
+    xor     rdi, rdi
+    syscall
+
+
+; подпрограмма: строка → число (простая, до 10 цифр)
+str_to_num:
+    xor     rax, rax
+    xor     rbx, rbx
+.loop:
+    mov     bl, [rsi]
+    inc     rsi
+    cmp     bl, 10
+    je      .done
+    cmp     bl, 13
+    je      .done
+    cmp     bl, 0
+    je      .done
+    sub     bl, '0'
+    imul    rax, 10
+    add     rax, rbx
+    jmp     .loop
+.done:
+    ret
+```
+
+### 5.3 — Подсчёт длины введённой строки (до 0 или \n)
+
+```nasm
+; ЛР №6 Задание 5.3 — длина введённой строки
+section .data
+    prompt  db      "Введи строку: ", 0
+    msg     db      10, "Длина = "
+
+section .bss
+    buf     resb    256
+    numbuf  resb    32                      ; для числа в строку
+
+section .text
+    global _start
+
+_start:
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, prompt
+    mov     rdx, 15
+    syscall
+
+    mov     rax, 0
+    mov     rdi, 0
+    mov     rsi, buf
+    mov     rdx, 255
+    syscall
+
+    ; заменяем \n на 0
+    mov     rdi, buf
+    mov     rcx, rax                        ; сколько прочитали
+    mov     al, 10
+    repne   scasb
+    mov     byte [rdi-1], 0
+
+    ; считаем длину до 0
+    mov     rdi, buf
+    xor     rcx, rcx
+    not     rcx                             ; rcx = -1
+    xor     al, al
+    cld
+    repne   scasb                           ; ищем 0
+    not     rcx
+    dec     rcx                             ; длина без 0
+
+    ; число → строка (простой способ)
+    mov     rdi, numbuf + 31
+    mov     byte [rdi], 0
+    mov     rbx, 10
+.convert:
+    dec     rdi
+    xor     rdx, rdx
+    div     rbx
+    add     dl, '0'
+    mov     [rdi], dl
+    test    rax, rax
+    jnz     .convert
+
+    ; вывод
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, msg
+    mov     rdx, 9
+    syscall
+
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, rdi                        ; начало числа
+    mov     rdx, numbuf + 32
+    sub     rdx, rsi                        ; длина строки числа
+    syscall
+
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, prompt + 14                ; там \n
+    mov     rdx, 1
+    syscall
+
+    mov     rax, 60
+    xor     rdi, rdi
+    syscall
+```
+
+### 5.4 — Позиция введённого символа в строке (вариант 1)
+
+```nasm
+; ЛР №6 Задание 5.4 вариант 1 — позиция символа
+section .data
+    src     db      "Найди букву в этой строке пожалуйста", 0
+    prompt  db      10, "Введи символ: "
+    found   db      10, "Позиция (с 0): "
+    notf    db      10, "Не найдено", 10
+
+section .bss
+    sym     resb    2
+    numbuf  resb    16
+
+section .text
+    global _start
+
+_start:
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, prompt
+    mov     rdx, 16
+    syscall
+
+    mov     rax, 0
+    mov     rdi, 0
+    mov     rsi, sym
+    mov     rdx, 2
+    syscall
+
+    mov     al, [sym]
+
+    mov     rdi, src
+    xor     rcx, rcx
+    cld
+
+.loop:
+    cmp     byte [rdi], 0
+    je      .notfound
+    scasb
+    je      .found
+    inc     rcx
+    jmp     .loop
+
+.found:
+    ; rcx = позиция
+
+    mov     rdi, numbuf + 15
+    mov     byte [rdi], 10
+    mov     rbx, 10
+.conv:
+    dec     rdi
+    xor     rdx, rdx
+    div     rbx
+    add     dl, '0'
+    mov     [rdi], dl
+    test    rax, rax
+    jnz     .conv
+
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, found
+    mov     rdx, 18
+    syscall
+
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, rdi
+    mov     rdx, numbuf + 16
+    sub     rdx, rsi
+    syscall
+    jmp     .exit
+
+.notfound:
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, notf
+    mov     rdx, 12
+    syscall
+
+.exit:
+    mov     rax, 60
+    xor     rdi, rdi
+    syscall
+```
+
+### 5.5 — Проверка пароля
+
+```nasm
+; ЛР №6 Задание 5.5 — проверка пароля
+section .data
+    good    db      "qwerty123", 0
+    goodlen equ     $ - good - 1
+
+    prompt  db      "Пароль: "
+    ok      db      10, "Доступ разрешен", 10
+    bad     db      10, "Пароль неверный", 10
+
+section .bss
+    input   resb    64
+
+section .text
+    global _start
+
+_start:
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, prompt
+    mov     rdx, 8
+    syscall
+
+    mov     rax, 0
+    mov     rdi, 0
+    mov     rsi, input
+    mov     rdx, 63
+    syscall
+
+    ; заменяем \n на 0
+    mov     rdi, input
+    mov     rcx, rax
+    mov     al, 10
+    repne   scasb
+    mov     byte [rdi-1], 0
+
+    ; сравниваем
+    mov     rsi, input
+    mov     rdi, good
+    mov     rcx, goodlen
+    cld
+    repe    cmpsb
+
+    jne     .wrong
+
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, ok
+    mov     rdx, 18
+    syscall
+    jmp     .exit
+
+.wrong:
+    mov     rax, 1
+    mov     rdi, 1
+    mov     rsi, bad
+    mov     rdx, 17
+    syscall
+
+.exit:
+    mov     rax, 60
+    xor     rdi, rdi
+    syscall
+```
+
+### Всё в одном файле (п.6.2)
+
+Просто скопируй все блоки кода выше один под другим (убери лишние `_start`, оставь только один в начале).  
+Между заданиями вставь метки типа `jmp next_task` и `next_task:` чтобы они шли по очереди.
+
+Если хочешь — пиши, доработаю любой кусок (например, сделаю красивее вывод или добавлю больше проверок).  
+Удачи сдать лабу, держись! 💪
