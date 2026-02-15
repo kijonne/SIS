@@ -1,0 +1,188 @@
+//1
+
+%include "io64.inc"
+
+section .text
+global main
+
+main:
+    mov rcx, 5
+    call double_x
+    PRINT_DEC 8, rax
+    NEWLINE
+    ret
+
+double_x:
+    push rbp
+    mov rbp, rsp
+    mov rax, rcx
+    shl rax, 1
+    pop rbp
+    ret
+
+//2 
+%include "io64.inc"
+
+section .text
+global main
+
+main:
+    push 10             ; d
+    push 20             ; c
+    push 3              ; b
+    push 4              ; a           
+
+    call expr
+
+    add rsp, 32
+
+    PRINT_DEC 8, rax
+    NEWLINE
+    xor rax, rax
+    ret
+
+expr:
+    push rbp
+    mov rbp, rsp
+
+    mov rax, [rbp+16]
+    add rax, [rbp+24]
+
+    mov rcx, [rbp+32]
+    sub rcx, [rbp+40]
+
+    imul rax, rcx 
+
+    mov rsp, rbp
+    pop rbp
+    ret
+
+
+//3
+%include "io64.inc"
+
+section .text
+global main
+
+main:
+    sub rsp, 32
+    mov rcx, 2          ; a 
+    mov rdx, 3          ; b 
+    mov r8, 4           ; c 
+    mov r9, 5           ; x 
+    call quad_expr
+    add rsp, 32
+    PRINT_DEC 8, rax
+    NEWLINE
+    ret
+
+quad_expr:
+    push rbp
+    mov rbp, rsp
+    sub rsp, 1
+    mov rax, r9         ; x
+    imul rax, r9        ; x²
+    imul rax, rcx       ; a * x²
+    mov [rbp-8], rax    ; Локальная1 = ax²
+    mov rax, rdx        ; b
+    imul rax, r9        ; b * x
+    mov [rbp-16], rax   ; Локальная2 = bx
+    mov rax, [rbp-8]
+    add rax, [rbp-16]   ; ax² + bx
+    add rax, r8         ; + c
+    mov rsp, rbp       
+    pop rbp
+    ret
+
+
+//4
+main_strlen.asm
+
+%include "io64.inc"
+%include "C:\Users\MSI\Downloads\4\my_strlen.asm"
+
+extern my_strlen
+
+section .data
+test_str db "hello", 0    ; Тестовая строка
+
+section .text
+global main
+
+main:
+    mov rcx, test_str   ; Адрес строки
+    call my_strlen
+    PRINT_DEC 8, rax    ; Вывод: 5
+    NEWLINE
+    ret
+
+my_strlen.asm
+global my_strlen
+
+section .text
+
+my_strlen:
+    push rbp
+    mov rbp, rsp
+    mov rax, 0          ; len = 0
+    mov rdx, rcx        ; ptr = str
+
+loop_str:
+    mov bl, [rdx]
+    cmp bl, 0           ; \0
+    je end_str
+    cmp bl, 10          ; \n (LF)
+    je end_str
+    inc rax
+    inc rdx
+    jmp loop_str
+
+end_str:
+    pop rbp
+    ret
+
+//5
+compare_arrays.asm (отдельный файл — подпрограмма):
+nasmglobal compare_arrays
+
+section .text
+
+compare_arrays:
+    push rbp
+    mov rbp, rsp
+    push rdi
+    push rsi            ; Сохранение callee-saved регистров (по Windows ABI)
+    mov rdi, rcx        ; arr1
+    mov rsi, rdx        ; arr2
+    mov rcx, r8         ; len
+    test rcx, rcx
+    jz equal            ; Если len=0, равны
+comp_loop:
+    mov al, [rdi]
+    cmp al, [rsi]
+    jne not_equal
+    inc rdi
+    inc rsi
+    loop comp_loop
+equal:
+    mov rax, 1
+    jmp done
+not_equal:
+    mov rax, 0
+done:
+    pop rsi
+    pop rdi
+    pop rbp
+    ret
+main_compare.c (основной файл на C):
+C#include <stdio.h>
+
+extern long long compare_arrays(char* arr1, char* arr2, long long len);  // Прототип asm-функции
+
+int main() {
+    char arr1[] = "hello";
+    char arr2[] = "hello";
+    long long res = compare_arrays(arr1, arr2, 5);
+    printf("Результат сравнения: %lld\n", res);  // Вывод: 1 (равны)
+    return 0;
+}
