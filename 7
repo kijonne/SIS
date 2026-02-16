@@ -1,0 +1,3 @@
+nasm -f win64 my_strlen.asm -o my_strlen.obj
+nasm -f win64 main_strlen.asm -o main.obj
+golink /entry:main main.obj my_strlen.obj io64.obj /subsystem:console
