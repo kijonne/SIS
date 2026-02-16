@@ -1,0 +1,11 @@
+#include <iostream>  // для std::cout
+
+extern "C" long long compare_arrays(char* arr1, char* arr2, long long len);  // Прототип asm-функции (extern "C" — обязательно, чтобы избежать name mangling в C++)
+
+int main() {
+    char arr1[] = "hello";
+    char arr2[] = "hello";
+    long long res = compare_arrays(arr1, arr2, 5);
+    std::cout << "Результат сравнения: " << res << std::endl;  // Вывод: 1 (равны)
+    return 0;
+}
