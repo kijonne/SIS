@@ -1,0 +1,43 @@
+const int button = 2;   // кнопка пешехода
+const int redLED  = 9;  // красный
+const int greenLED = 10; // зелёный
+
+volatile bool request = false;
+
+void setup() {
+  pinMode(button, INPUT_PULLUP);
+  pinMode(redLED, OUTPUT);
+  pinMode(greenLED, OUTPUT);
+  
+  attachInterrupt(digitalPinToInterrupt(button), buttonPress, FALLING);
+  
+  digitalWrite(redLED, HIGH);   // старт — красный горит
+  digitalWrite(greenLED, LOW);
+}
+
+void loop() {
+  if (request) {
+    request = false;
+    
+    delay(3000);                    // ждём 3 секунды
+    
+    // === КРАСНЫЙ МИГАЕТ 3 РАЗА ===
+    for (int i = 0; i < 3; i++) {
+      digitalWrite(redLED, LOW);    delay(250);
+      digitalWrite(redLED, HIGH);   delay(250);
+    }
+    
+    // === ПЕРЕКЛЮЧАЕМ НА ЗЕЛЁНЫЙ ===
+    digitalWrite(redLED, LOW);      // красный выключаем!
+    digitalWrite(greenLED, HIGH);   // зелёный включаем
+    delay(10000);                   // 10 секунд
+    
+    // === ОБРАТНО НА КРАСНЫЙ ===
+    digitalWrite(greenLED, LOW);
+    digitalWrite(redLED, HIGH);
+  }
+}
+
+void buttonPress() {
+  request = true;
+}
