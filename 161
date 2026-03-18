@@ -1,0 +1,297 @@
+Вот весь код текстом:
+
+```csharp
+// ============================================================
+// Лабораторная работа №16 — TUI / CLI приложение
+// Все задания в одном файле; каждый раздел помечен заголовком
+// ============================================================
+
+// Задание 5.1 — 5.3: подключаем System.CommandLine
+// Задание 5.5: подключаем Terminal.Gui
+using System.CommandLine;
+using Terminal.Gui;
+
+// ─────────────────────────────────────────────────────────────
+// ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ (используются во всех заданиях)
+// ─────────────────────────────────────────────────────────────
+
+// Путь к файлу с учётными данными
+const string UsersFile = "users.txt";
+
+// Чтение всех пользователей из файла → словарь login → password
+static Dictionary<string, string> LoadUsers()
+{
+    if (!File.Exists(UsersFile))
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    return File.ReadAllLines(UsersFile)
+               .Where(l => l.Contains(':'))
+               .Select(l => l.Split(':', 2))
+               .ToDictionary(p => p[0], p => p[1], StringComparer.OrdinalIgnoreCase);
+}
+
+// Добавление нового пользователя в файл
+static void SaveUser(string login, string password) =>
+    File.AppendAllText(UsersFile, $"{login}:{password}{Environment.NewLine}");
+
+// ─────────────────────────────────────────────────────────────
+// ЗАДАНИЕ 5.4 — Скрытие символов пароля при вводе
+// ─────────────────────────────────────────────────────────────
+static string ReadPassword()
+{
+    var sb = new System.Text.StringBuilder();
+
+    while (true)
+    {
+        // Console.ReadKey(true) — символ не отображается в консоли (5.4.1)
+        var key = Console.ReadKey(intercept: true);
+
+        if (key.Key == ConsoleKey.Enter)          // Enter завершает ввод (5.4.2)
+        {
+            Console.WriteLine();
+            break;
+        }
+
+        if (key.Key == ConsoleKey.Backspace)       // Backspace стирает символ (5.4.2)
+        {
+            if (sb.Length > 0)
+            {
+                sb.Remove(sb.Length - 1, 1);
+                // Визуально стираем последнюю звёздочку
+                Console.Write("\b \b");
+            }
+            continue;
+        }
+
+        sb.Append(key.KeyChar);
+        Console.Write('*');   // вместо реального символа — звёздочка
+    }
+
+    return sb.ToString();
+}
+
+// ─────────────────────────────────────────────────────────────
+// ЗАДАНИЕ 5.1 — Авторизация (интерактивный режим)
+// ─────────────────────────────────────────────────────────────
+static void LoginInteractive(string? loginArg, string? pwdArg)
+{
+    var users = LoadUsers();
+    const int MaxAttempts = 3;
+
+    while (true) // цикл «начать сначала после 3-х неудач»
+    {
+        // ── Получить логин ────────────────────────────────────
+        string login;
+        if (loginArg != null)
+        {
+            // 5.3.2 — параметр передан → не запрашиваем
+            login = loginArg;
+        }
+        else
+        {
+            Console.Write("Логин: ");
+            login = Console.ReadLine() ?? "";
+        }
+
+        bool userExists = users.ContainsKey(login);
+        int attempts = 0;
+
+        while (attempts < MaxAttempts)
+        {
+            // ── Получить пароль ───────────────────────────────
+            string password;
+            if (pwdArg != null && attempts == 0)
+            {
+                // 5.3.2 — параметр передан → не запрашиваем
+                password = pwdArg;
+            }
+            else
+            {
+                // 5.3.3 — логин задан параметром, а пароль — нет:
+                //         запрашиваем только пароль
+                Console.Write("Пароль: ");
+                password = ReadPassword(); // 5.4 — скрытый ввод
+            }
+
+            // Проверка учётных данных
+            if (userExists && users[login] == password)
+            {
+                Console.WriteLine($"✓ Добро пожаловать, {login}!");
+                return; // успех — выходим
+            }
+
+            attempts++;
+
+            if (attempts < MaxAttempts)
+            {
+                if (!userExists)
+                    Console.WriteLine($"Пользователь не найден. Попробуйте снова ({attempts}/{MaxAttempts}).");
+                else
+                    Console.WriteLine($"Неверный пароль. Попробуйте снова ({attempts}/{MaxAttempts}).");
+
+                // 5.1.2 — если пользователь не существует, предлагаем ввести логин заново
+                if (!userExists)
+                {
+                    Console.Write("Логин: ");
+                    login = Console.ReadLine() ?? "";
+                    userExists = users.ContainsKey(login);
+                    loginArg = null; // сбрасываем аргумент, чтобы не зацикливаться
+                }
+            }
+        }
+
+        // 5.1.2 — после 3 неудач — начать сначала
+        Console.WriteLine("Превышено количество попыток. Начните заново.\n");
+        loginArg = null;
+        pwdArg   = null;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// ЗАДАНИЕ 5.2 — Подкоманда register (интерактивный режим)
+// ─────────────────────────────────────────────────────────────
+static void RegisterInteractive(string? loginArg, string? pwdArg)
+{
+    // ── Получить логин ────────────────────────────────────────
+    string login;
+    if (loginArg != null)
+    {
+        login = loginArg;
+    }
+    else
+    {
+        Console.Write("Логин: ");
+        login = Console.ReadLine() ?? "";
+    }
+
+    var users = LoadUsers();
+    if (users.ContainsKey(login))
+    {
+        Console.WriteLine($"Пользователь '{login}' уже существует.");
+        return;
+    }
+
+    // ── Получить пароль и подтверждение ──────────────────────
+    string password;
+    if (pwdArg != null)
+    {
+        // 5.3.2 — оба параметра переданы → не запрашиваем
+        password = pwdArg;
+        SaveUser(login, password);
+        Console.WriteLine($"✓ Пользователь '{login}' зарегистрирован.");
+        return;
+    }
+
+    while (true)
+    {
+        Console.Write("Пароль: ");
+        password = ReadPassword();           // 5.4 — скрытый ввод
+
+        Console.Write("Подтверждение пароля: ");
+        string confirm = ReadPassword();     // 5.4 — скрытый ввод
+
+        if (password == confirm)
+            break;
+
+        Console.WriteLine("Пароли не совпадают. Попробуйте ещё раз.");
+    }
+
+    SaveUser(login, password);
+    Console.WriteLine($"✓ Пользователь '{login}' зарегистрирован.");
+}
+
+// ─────────────────────────────────────────────────────────────
+// ЗАДАНИЕ 5.5 — Terminal.Gui: TUI-интерфейс авторизации
+// ─────────────────────────────────────────────────────────────
+static void RunTui()
+{
+    Application.Init();
+
+    var top = Application.Top;
+
+    // Главное окно
+    var win = new Window("Авторизация")
+    {
+        X = Pos.Center(),
+        Y = Pos.Center(),
+        Width  = 50,
+        Height = 12,
+    };
+    top.Add(win);
+
+    // Поле ввода логина
+    var lblLogin = new Label("Логин:  ") { X = 2, Y = 2 };
+    var txtLogin = new TextField("")    { X = 12, Y = 2, Width = 30 };
+
+    // Поле ввода пароля (5.5.3 — поле для пароля)
+    var lblPwd = new Label("Пароль: ") { X = 2, Y = 4 };
+    var txtPwd  = new TextField("")    { X = 12, Y = 4, Width = 30, Secret = true };
+
+    // Кнопка «Войти»
+    var btnLogin = new Button("Войти") { X = Pos.Center(), Y = 7 };
+
+    // 5.5.3 — обработчик кнопки: проверяем данные, выводим диалог
+    btnLogin.Clicked += () =>
+    {
+        var users    = LoadUsers();
+        string login = txtLogin.Text.ToString() ?? "";
+        string pwd   = txtPwd.Text.ToString()   ?? "";
+
+        string message = (users.TryGetValue(login, out var stored) && stored == pwd)
+            ? $"✓ Добро пожаловать, {login}!"
+            : "✗ Неверный логин или пароль.";
+
+        // 5.5.3 — диалоговое окно для результата
+        MessageBox.Query("Результат", message, "OK");
+    };
+
+    win.Add(lblLogin, txtLogin, lblPwd, txtPwd, btnLogin);
+
+    Application.Run();
+    Application.Shutdown();
+}
+
+// ─────────────────────────────────────────────────────────────
+// ТОЧКА ВХОДА — System.CommandLine (5.1, 5.2, 5.3, 5.5)
+// ─────────────────────────────────────────────────────────────
+
+// ── 5.3.1 — Общие параметры --login и --pwd ──────────────────
+var loginOption = new Option<string?>("--login", "Логин пользователя");
+var pwdOption   = new Option<string?>("--pwd",   "Пароль пользователя");
+
+// ── 5.5.1 — Параметр --ui ────────────────────────────────────
+var uiOption = new Option<bool>("--ui", "Запустить графический TUI-интерфейс");
+
+// ── Корневая команда (5.1) ────────────────────────────────────
+var rootCommand = new RootCommand("Утилита авторизации пользователей");
+rootCommand.AddOption(loginOption);
+rootCommand.AddOption(pwdOption);
+rootCommand.AddOption(uiOption);
+
+rootCommand.SetHandler((string? login, string? pwd, bool ui) =>
+{
+    if (ui)
+    {
+        RunTui();          // 5.5 — TUI-режим
+        return;
+    }
+    LoginInteractive(login, pwd);  // 5.1 / 5.3 — CLI-режим
+},
+loginOption, pwdOption, uiOption);
+
+// ── 5.2 — Подкоманда register ────────────────────────────────
+var registerCommand = new Command("register", "Регистрация нового пользователя");
+registerCommand.AddOption(loginOption);
+registerCommand.AddOption(pwdOption);
+
+registerCommand.SetHandler((string? login, string? pwd) =>
+{
+    RegisterInteractive(login, pwd);   // 5.2 / 5.3
+},
+loginOption, pwdOption);
+
+rootCommand.AddCommand(registerCommand);
+
+// Запуск
+return await rootCommand.InvokeAsync(args);
+```
