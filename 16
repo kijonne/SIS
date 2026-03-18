@@ -1,0 +1,383 @@
+Вот более простой и понятный вариант лабораторной работы. Я объединил всё в один файл Program.cs, чтобы было легче разобраться.
+
+```csharp
+using System;
+using System.IO;
+using System.Text;
+using System.CommandLine;
+using Terminal.Gui;
+
+namespace Lab16
+{
+    class Program
+    {
+        // Путь к файлу с пользователями
+        static string usersFile = "users.txt";
+
+        static async Task<int> Main(string[] args)
+        {
+            // Создаем корневую команду
+            var rootCommand = new RootCommand("Программа для авторизации и регистрации");
+
+            // Добавляем опции (параметры командной строки)
+            var loginOption = new Option<string>("--login", "Логин пользователя");
+            var pwdOption = new Option<string>("--pwd", "Пароль пользователя");
+            var uiOption = new Option<bool>("--ui", "Запустить с графическим интерфейсом");
+
+            rootCommand.AddOption(loginOption);
+            rootCommand.AddOption(pwdOption);
+            rootCommand.AddOption(uiOption);
+
+            // Обработчик основной команды (вход в систему)
+            rootCommand.SetHandler((string login, string pwd, bool ui) =>
+            {
+                if (ui)
+                {
+                    // Запуск в режиме графического интерфейса
+                    RunTUI();
+                }
+                else if (string.IsNullOrEmpty(login))
+                {
+                    // Если логин не указан - интерактивный режим
+                    RunInteractiveLogin();
+                }
+                else if (string.IsNullOrEmpty(pwd))
+                {
+                    // Если указан только логин - запрашиваем пароль
+                    Console.Write("Введите пароль: ");
+                    pwd = ReadPassword();
+                    CheckLogin(login, pwd);
+                }
+                else
+                {
+                    // Если указаны и логин и пароль
+                    CheckLogin(login, pwd);
+                }
+            }, loginOption, pwdOption, uiOption);
+
+            // Создаем подкоманду register
+            var registerCommand = new Command("register", "Регистрация нового пользователя");
+            registerCommand.AddOption(loginOption);
+            registerCommand.AddOption(pwdOption);
+
+            // Обработчик команды register
+            registerCommand.SetHandler((string login, string pwd) =>
+            {
+                if (string.IsNullOrEmpty(login) || string.IsNullOrEmpty(pwd))
+                {
+                    // Интерактивная регистрация
+                    RegisterInteractive();
+                }
+                else
+                {
+                    // Регистрация с параметрами
+                    RegisterUser(login, pwd);
+                }
+            }, loginOption, pwdOption);
+
+            rootCommand.AddCommand(registerCommand);
+
+            // Запускаем парсер командной строки
+            return await rootCommand.InvokeAsync(args);
+        }
+
+        // ============ МЕТОДЫ ДЛЯ РАБОТЫ С ФАЙЛОМ ============
+
+        // Проверка логина и пароля
+        static bool CheckUser(string login, string password)
+        {
+            if (!File.Exists(usersFile))
+                return false;
+
+            string[] lines = File.ReadAllLines(usersFile);
+            foreach (string line in lines)
+            {
+                string[] parts = line.Split('|');
+                if (parts.Length == 2 && parts[0] == login && parts[1] == password)
+                    return true;
+            }
+            return false;
+        }
+
+        // Проверка существует ли пользователь
+        static bool UserExists(string login)
+        {
+            if (!File.Exists(usersFile))
+                return false;
+
+            string[] lines = File.ReadAllLines(usersFile);
+            foreach (string line in lines)
+            {
+                string[] parts = line.Split('|');
+                if (parts.Length == 2 && parts[0] == login)
+                    return true;
+            }
+            return false;
+        }
+
+        // Добавление нового пользователя
+        static bool AddUser(string login, string password)
+        {
+            if (UserExists(login))
+                return false;
+
+            File.AppendAllText(usersFile, $"{login}|{password}\n");
+            return true;
+        }
+
+        // ============ МЕТОДЫ ДЛЯ ВВОДА ПАРОЛЯ ============
+
+        // Чтение пароля с маскировкой (звездочки)
+        static string ReadPassword()
+        {
+            StringBuilder password = new StringBuilder();
+            ConsoleKeyInfo key;
+
+            do
+            {
+                key = Console.ReadKey(true);
+
+                if (key.Key == ConsoleKey.Backspace && password.Length > 0)
+                {
+                    // Удаляем символ
+                    password.Remove(password.Length - 1, 1);
+                    Console.Write("\b \b"); // Стираем звездочку
+                }
+                else if (key.Key != ConsoleKey.Enter && key.Key != ConsoleKey.Backspace)
+                {
+                    // Добавляем символ
+                    password.Append(key.KeyChar);
+                    Console.Write("*"); // Печатаем звездочку
+                }
+
+            } while (key.Key != ConsoleKey.Enter);
+
+            Console.WriteLine();
+            return password.ToString();
+        }
+
+        // ============ МЕТОДЫ ДЛЯ АВТОРИЗАЦИИ ============
+
+        // Проверка логина и пароля с выводом результата
+        static void CheckLogin(string login, string password)
+        {
+            if (CheckUser(login, password))
+            {
+                Console.WriteLine("Успешный вход!");
+            }
+            else
+            {
+                Console.WriteLine("Неверный логин или пароль!");
+            }
+        }
+
+        // Интерактивный режим входа (с повторными попытками)
+        static void RunInteractiveLogin()
+        {
+            while (true)
+            {
+                Console.Write("Логин: ");
+                string login = Console.ReadLine();
+
+                int attempts = 0;
+                while (attempts < 3)
+                {
+                    Console.Write("Пароль: ");
+                    string password = ReadPassword();
+
+                    if (CheckUser(login, password))
+                    {
+                        Console.WriteLine("Успешный вход!");
+                        return;
+                    }
+                    else
+                    {
+                        attempts++;
+                        if (attempts < 3)
+                        {
+                            Console.WriteLine($"Неверный пароль! Осталось попыток: {3 - attempts}");
+                        }
+                    }
+                }
+
+                // После 3 неудачных попыток начинаем заново
+                Console.WriteLine("Попытки исчерпаны. Начните сначала.");
+            }
+        }
+
+        // ============ МЕТОДЫ ДЛЯ РЕГИСТРАЦИИ ============
+
+        // Регистрация с параметрами
+        static void RegisterUser(string login, string password)
+        {
+            if (AddUser(login, password))
+            {
+                Console.WriteLine("Регистрация успешна!");
+            }
+            else
+            {
+                Console.WriteLine("Ошибка! Пользователь уже существует.");
+            }
+        }
+
+        // Интерактивная регистрация
+        static void RegisterInteractive()
+        {
+            Console.Write("Логин: ");
+            string login = Console.ReadLine();
+
+            Console.Write("Пароль: ");
+            string password = ReadPassword();
+
+            Console.Write("Подтверждение пароля: ");
+            string confirm = ReadPassword();
+
+            if (password != confirm)
+            {
+                Console.WriteLine("Пароли не совпадают!");
+                return;
+            }
+
+            if (AddUser(login, password))
+            {
+                Console.WriteLine("Регистрация успешна!");
+            }
+            else
+            {
+                Console.WriteLine("Пользователь с таким логином уже существует!");
+            }
+        }
+
+        // ============ МЕТОДЫ ДЛЯ ГРАФИЧЕСКОГО ИНТЕРФЕЙСА ============
+
+        // Запуск графического режима (Terminal.Gui)
+        static void RunTUI()
+        {
+            Application.Init();
+
+            var win = new Window("Авторизация")
+            {
+                X = 0,
+                Y = 0,
+                Width = Dim.Fill(),
+                Height = Dim.Fill()
+            };
+
+            // Поле для логина
+            var lblLogin = new Label("Логин:")
+            {
+                X = 2,
+                Y = 2
+            };
+
+            var txtLogin = new TextField("")
+            {
+                X = 10,
+                Y = 2,
+                Width = 30
+            };
+
+            // Поле для пароля
+            var lblPwd = new Label("Пароль:")
+            {
+                X = 2,
+                Y = 4
+            };
+
+            var txtPwd = new TextField("")
+            {
+                X = 10,
+                Y = 4,
+                Width = 30,
+                Secret = true // Скрытый ввод
+            };
+
+            // Кнопка входа
+            var btnLogin = new Button("Войти")
+            {
+                X = 10,
+                Y = 6
+            };
+
+            // Обработчик кнопки
+            btnLogin.Clicked += () =>
+            {
+                string login = txtLogin.Text.ToString();
+                string pwd = txtPwd.Text.ToString();
+
+                if (CheckUser(login, pwd))
+                {
+                    MessageBox.Query("Успех", "Авторизация успешна!", "OK");
+                    Application.RequestStop();
+                }
+                else
+                {
+                    MessageBox.ErrorQuery("Ошибка", "Неверный логин или пароль!", "OK");
+                }
+            };
+
+            win.Add(lblLogin, txtLogin, lblPwd, txtPwd, btnLogin);
+            Application.Run(win);
+            Application.Shutdown();
+        }
+    }
+}
+```
+
+Как использовать программу:
+
+1. Запуск без параметров (интерактивный вход):
+
+```
+dotnet run
+```
+
+Будет запрошен логин и пароль. На неверный пароль дается 3 попытки, затем всё начинается заново.
+
+2. Вход с параметрами:
+
+```
+dotnet run --login admin --pwd 123
+```
+
+Проверка выполняется сразу без запросов.
+
+3. Вход с указанием только логина:
+
+```
+dotnet run --login admin
+```
+
+Запросит только пароль (с маскировкой).
+
+4. Регистрация:
+
+```
+dotnet run register --login newuser --pwd 12345
+```
+
+или интерактивно:
+
+```
+dotnet run register
+```
+
+5. Графический режим:
+
+```
+dotnet run --ui
+```
+
+Откроется окно с полями для ввода.
+
+Что хранится в файле users.txt:
+
+```
+admin|123
+user1|pass
+newuser|12345
+```
+
+Каждая строка: логин|пароль
+
+Этот код проще для понимания и содержит все необходимые функции из лабораторной работы.
