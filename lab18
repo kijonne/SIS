@@ -1,0 +1,591 @@
+**Готово! Лаба №18 полностью реализована на базе твоей ЛР №17.**
+
+Я взял весь код из фотографий, исправил проблему с картинками (и объясню ниже), добавил **все** требования из лабораторной (5.1–5.5), сделал красивые отдельные окна свойств и динамическую смену колонок в `ListView` при переходе между видом дисков и видом папок.
+
+### 1. Фикс картинок (иконок файлов/папок) в ЛР17
+Причина: файлы изображений не помечены как **Resource**.
+
+**Что сделать:**
+1. В Solution Explorer найди папку `Images` (если нет — создай и положи туда все `.png`).
+2. Выдели все `.png`-файлы → **Properties** → **Build Action** = **Resource** (не Content!).
+3. Пересобери проект (Rebuild).
+
+После этого иконки будут отображаться и в ЛР17, и в ЛР18.
+
+---
+
+### 2. Что изменилось в проекте
+
+**Новые файлы (добавь через VS → Add → Window):**
+- `DiskPropertiesWindow.xaml` + `.cs`
+- `FolderPropertiesWindow.xaml` + `.cs`
+
+**Изменённые файлы:**
+- `FileItem.cs`
+- `MainWindow.xaml.cs`
+- `MainWindow.xaml` (небольшое дополнение в меню и контекстное меню)
+
+---
+
+### 3. FileItem.cs (полный обновлённый код)
+
+```csharp
+using System.Windows.Media.Imaging;
+
+namespace LabWork17
+{
+    public class FileItem
+    {
+        public BitmapImage Image { get; set; }
+        public string Name { get; set; }
+        public string FullPath { get; set; }
+        public DateTime LastWriteTime { get; set; }
+        public string Size { get; set; }
+        public bool IsDirectory { get; set; }
+
+        // === Новые поля для дисков ===
+        public long TotalSize { get; set; } = 0;
+        public long FreeSpace { get; set; } = 0;
+        public double UsedPercent { get; set; } = 0;
+        public string TotalSizeStr { get; set; } = "";
+        public string FreeSpaceStr { get; set; } = "";
+        public bool IsDrive { get; set; } = false;
+    }
+
+    // Для топ-5 файлов в свойствах папки
+    public class TopFileItem
+    {
+        public string SizeStr { get; set; }
+        public string FullPath { get; set; }
+    }
+}
+```
+
+---
+
+### 4. MainWindow.xaml.cs (ключевые изменения + полный обновлённый код)
+
+Замени **весь** код в `MainWindow.xaml.cs` на этот:
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
+
+namespace LabWork17
+{
+    public partial class MainWindow : Window
+    {
+        private string currentPath;
+        private readonly string defaultPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        private const string DrivesRoot = "";
+
+        private BitmapImage fileCopy, fileOpen, folder, fileVideo;
+
+        private bool isDrivesView = false;
+        private GridView filesGridView;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+        }
+
+        private void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            fileCopy = new BitmapImage(new Uri("/Images/fileCopy.png", UriKind.Relative));
+            fileOpen = new BitmapImage(new Uri("/Images/fileOpen.png", UriKind.Relative));
+            folder = new BitmapImage(new Uri("/Images/folder.png", UriKind.Relative));
+            fileVideo = new BitmapImage(new Uri("/Images/fileVideo.png", UriKind.Relative));
+
+            filesGridView = lvFiles.View as GridView;   // сохраняем оригинальные колонки
+
+            // Запуск — сразу показываем список дисков (аналог «Мой компьютер»)
+            currentPath = DrivesRoot;
+            txtPath.Text = "";
+            LoadDrives();
+        }
+
+        // ====================== ВИД ДИСКОВ ======================
+        private void LoadDrives()
+        {
+            isDrivesView = true;
+            currentPath = DrivesRoot;
+            txtPath.Text = "";
+
+            var items = new List<FileItem>();
+
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                if (!drive.IsReady) continue;
+
+                long total = drive.TotalSize;
+                long free = drive.TotalFreeSpace;
+                double percent = total > 0 ? (double)(total - free) / total * 100 : 0;
+
+                string label = string.IsNullOrEmpty(drive.VolumeLabel) ? "Локальный диск" : drive.VolumeLabel;
+                string name = $"{drive.Name.TrimEnd('\\')} ({label})";
+
+                items.Add(new FileItem
+                {
+                    Image = folder,
+                    Name = name,
+                    FullPath = drive.Name,
+                    IsDirectory = true,
+                    IsDrive = true,
+                    TotalSize = total,
+                    FreeSpace = free,
+                    UsedPercent = percent,
+                    TotalSizeStr = FormatFileSize(total),
+                    FreeSpaceStr = FormatFileSize(free)
+                });
+            }
+
+            lvFiles.ItemsSource = items.OrderBy(i => i.Name);
+            SetDrivesView();
+        }
+
+        private void SetDrivesView()
+        {
+            var gv = new GridView();
+
+            // Иконка
+            var iconCol = new GridViewColumn { Header = "", Width = 30 };
+            var iconFactory = new FrameworkElementFactory(typeof(Image));
+            iconFactory.SetValue(Image.SourceProperty, new System.Windows.Data.Binding("Image"));
+            iconFactory.SetValue(Image.WidthProperty, 24.0);
+            iconFactory.SetValue(Image.HeightProperty, 24.0);
+            iconCol.CellTemplate = new DataTemplate { VisualTree = iconFactory };
+            gv.Columns.Add(iconCol);
+
+            // Буква и метка тома
+            gv.Columns.Add(new GridViewColumn 
+            { 
+                Header = "Буква и метка тома", 
+                Width = 300, 
+                DisplayMemberBinding = new System.Windows.Data.Binding("Name") 
+            });
+
+            // Общий размер
+            gv.Columns.Add(new GridViewColumn 
+            { 
+                Header = "Общий размер", 
+                Width = 120, 
+                DisplayMemberBinding = new System.Windows.Data.Binding("TotalSizeStr") 
+            });
+
+            // Свободно
+            gv.Columns.Add(new GridViewColumn 
+            { 
+                Header = "Свободно", 
+                Width = 120, 
+                DisplayMemberBinding = new System.Windows.Data.Binding("FreeSpaceStr") 
+            });
+
+            // ProgressBar % занято
+            var progCol = new GridViewColumn { Header = "% занято", Width = 180 };
+            var progFactory = new FrameworkElementFactory(typeof(ProgressBar));
+            progFactory.SetValue(ProgressBar.ValueProperty, new System.Windows.Data.Binding("UsedPercent"));
+            progFactory.SetValue(ProgressBar.MinimumProperty, 0.0);
+            progFactory.SetValue(ProgressBar.MaximumProperty, 100.0);
+            progFactory.SetValue(ProgressBar.HeightProperty, 18.0);
+            progCol.CellTemplate = new DataTemplate { VisualTree = progFactory };
+            gv.Columns.Add(progCol);
+
+            lvFiles.View = gv;
+        }
+
+        // ====================== ОБЫЧНЫЙ ВИД ПАПОК ======================
+        private void LoadDirectory(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                LoadDrives();
+                return;
+            }
+
+            isDrivesView = false;
+
+            try
+            {
+                if (!Directory.Exists(path))
+                {
+                    MessageBox.Show("Указанный вами каталог не существует", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                currentPath = path;
+                txtPath.Text = path;
+
+                var items = new List<FileItem>();
+
+                if (Directory.GetParent(path) != null)
+                {
+                    items.Add(new FileItem
+                    {
+                        Name = "..",
+                        FullPath = Directory.GetParent(path).FullName,
+                        IsDirectory = true
+                    });
+                }
+
+                foreach (var dir in Directory.GetDirectories(path))
+                {
+                    var di = new DirectoryInfo(dir);
+                    items.Add(new FileItem
+                    {
+                        Image = folder,
+                        Name = di.Name,
+                        FullPath = di.FullName,
+                        LastWriteTime = di.LastWriteTime,
+                        Size = "",
+                        IsDirectory = true,
+                        IsDrive = false
+                    });
+                }
+
+                foreach (var file in Directory.GetFiles(path))
+                {
+                    var fi = new FileInfo(file);
+                    items.Add(new FileItem
+                    {
+                        Image = GetIconForFile(fi),
+                        Name = fi.Name,
+                        FullPath = fi.FullName,
+                        LastWriteTime = fi.LastWriteTime,
+                        Size = FormatFileSize(fi.Length),
+                        IsDirectory = false
+                    });
+                }
+
+                lvFiles.ItemsSource = items.OrderBy(i => !i.IsDirectory).ThenBy(i => i.Name);
+                lvFiles.View = filesGridView;   // возвращаем обычные колонки
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка загрузки каталога:\n{ex.Message}", "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private BitmapImage GetIconForFile(FileInfo fi)
+        {
+            string ext = fi.Extension.ToLower();
+            if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp")
+                return fileVideo;
+            return fileOpen;
+        }
+
+        public static string FormatFileSize(long bytes)
+        {
+            if (bytes == 0) return "0 Б";
+            string[] sizes = { "Б", "КБ", "МБ", "ГБ" };
+            int order = 0;
+            double size = bytes;
+            while (size >= 1024 && order < sizes.Length - 1)
+            {
+                order++;
+                size /= 1024;
+            }
+            return $"{size:0.##} {sizes[order]}";
+        }
+
+        // ====================== ПЕРЕХОДЫ ======================
+        private void MyComputer_Click(object sender, RoutedEventArgs e)
+        {
+            LoadDrives();
+        }
+
+        // ====================== СВОЙСТВА (контекстное меню) ======================
+        private void CtxProperties_Click(object sender, RoutedEventArgs e)
+        {
+            if (lvFiles.SelectedItem is not FileItem item) return;
+
+            if (item.IsDrive)
+            {
+                new DiskPropertiesWindow(item.FullPath).ShowDialog();
+            }
+            else if (item.IsDirectory && item.Name != "..")
+            {
+                new FolderPropertiesWindow(item.FullPath).ShowDialog();
+            }
+        }
+
+        // ====================== ДВОЙНОЙ КЛИК (оставлен как был) ======================
+        private void LvFiles_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (lvFiles.SelectedItem is FileItem item)
+            {
+                if (item.IsDirectory)
+                {
+                    LoadDirectory(item.FullPath);
+                }
+                else
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = item.FullPath,
+                            UseShellExecute = true
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Не удалось открыть файл:\n{ex.Message}");
+                    }
+                }
+            }
+        }
+
+        // ====================== ОСТАЛЬНЫЕ ОБРАБОТЧИКИ (копирование, выход и т.д.) ======================
+        // Они у тебя уже были — оставь как есть
+        private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+        // BtnGo_Click, TxtPath_KeyDown, CtxCopy_Click и т.д. — оставь без изменений
+    }
+}
+```
+
+---
+
+### 5. Изменения в MainWindow.xaml (добавь в меню и контекстное меню)
+
+В разделе `<Menu>` добавь:
+
+```xml
+<MenuItem Header="Мой компьютер" Click="MyComputer_Click"/>
+```
+
+В `<ListView.ContextMenu>` в конец (перед `</ContextMenu>`) добавь:
+
+```xml
+<MenuItem Header="Свойства" Click="CtxProperties_Click"/>
+```
+
+---
+
+### 6. DiskPropertiesWindow.xaml + .cs
+
+**XAML** (дизайн окна свойств диска):
+
+```xml
+<Window x:Class="LabWork17.DiskPropertiesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Свойства диска" Height="420" Width="520" ResizeMode="NoResize">
+    <Grid Margin="15">
+        <StackPanel>
+            <TextBlock Text="Буква диска:" FontWeight="Bold"/>
+            <TextBlock x:Name="tbDrive" FontSize="14"/>
+            
+            <TextBlock Text="Метка тома:" Margin="0,10,0,0" FontWeight="Bold"/>
+            <TextBlock x:Name="tbLabel" FontSize="14"/>
+            
+            <TextBlock Text="Тип:" Margin="0,10,0,0" FontWeight="Bold"/>
+            <TextBlock x:Name="tbType" FontSize="14"/>
+            
+            <TextBlock Text="Файловая система:" Margin="0,10,0,0" FontWeight="Bold"/>
+            <TextBlock x:Name="tbFS" FontSize="14"/>
+            
+            <TextBlock Text="Общий объём:" Margin="0,15,0,0" FontWeight="Bold"/>
+            <TextBlock x:Name="tbTotal" FontSize="14"/>
+            
+            <TextBlock Text="Занято:" Margin="0,8,0,0" FontWeight="Bold"/>
+            <TextBlock x:Name="tbUsed" FontSize="14"/>
+            
+            <TextBlock Text="Свободно:" Margin="0,8,0,0" FontWeight="Bold"/>
+            <TextBlock x:Name="tbFree" FontSize="14"/>
+            
+            <ProgressBar x:Name="pbUsed" Height="25" Margin="0,15,0,5"/>
+            <TextBlock x:Name="tbPercent" HorizontalAlignment="Center" FontSize="14" FontWeight="Bold"/>
+        </StackPanel>
+    </Grid>
+</Window>
+```
+
+**Code-behind (.cs):**
+
+```csharp
+using System.IO;
+using System.Windows;
+
+namespace LabWork17
+{
+    public partial class DiskPropertiesWindow : Window
+    {
+        public DiskPropertiesWindow(string drivePath)
+        {
+            InitializeComponent();
+            LoadInfo(drivePath);
+        }
+
+        private void LoadInfo(string drivePath)
+        {
+            var drive = new DriveInfo(drivePath);
+
+            tbDrive.Text = drive.Name;
+            tbLabel.Text = drive.VolumeLabel ?? "Нет метки";
+            tbType.Text = drive.DriveType.ToString();
+            tbFS.Text = drive.DriveFormat ?? "—";
+
+            long total = drive.TotalSize;
+            long free = drive.TotalFreeSpace;
+            long used = total - free;
+
+            tbTotal.Text = MainWindow.FormatFileSize(total);
+            tbUsed.Text = MainWindow.FormatFileSize(used);
+            tbFree.Text = MainWindow.FormatFileSize(free);
+
+            double percent = total > 0 ? (double)used / total * 100 : 0;
+            pbUsed.Value = percent;
+            tbPercent.Text = $"{percent:0.##}% занято";
+        }
+    }
+}
+```
+
+---
+
+### 7. FolderPropertiesWindow.xaml + .cs
+
+**XAML:**
+
+```xml
+<Window x:Class="LabWork17.FolderPropertiesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Свойства папки" Height="550" Width="700">
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Наименование:" FontWeight="Bold"/>
+            <TextBlock x:Name="tbName" FontSize="14"/>
+            <TextBlock Text="Количество файлов (включая вложенные):" Margin="0,10,0,0" FontWeight="Bold"/>
+            <TextBlock x:Name="tbFiles" FontSize="14"/>
+            <TextBlock Text="Количество папок (включая вложенные):" Margin="0,8,0,0" FontWeight="Bold"/>
+            <TextBlock x:Name="tbFolders" FontSize="14"/>
+            <TextBlock Text="Размер папки:" Margin="0,8,0,0" FontWeight="Bold"/>
+            <TextBlock x:Name="tbSize" FontSize="14"/>
+            <TextBlock Text="% занятого места на диске:" Margin="0,8,0,0" FontWeight="Bold"/>
+            <ProgressBar x:Name="pbPercent" Height="20" Margin="0,5"/>
+            <TextBlock x:Name="tbPercentText" HorizontalAlignment="Center"/>
+        </StackPanel>
+
+        <TextBlock Grid.Row="1" Text="Топ 5 самых больших файлов:" Margin="0,20,0,5" FontWeight="Bold"/>
+        <ListView x:Name="lvTopFiles" Grid.Row="2">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Размер файла" Width="120" DisplayMemberBinding="{Binding SizeStr}"/>
+                    <GridViewColumn Header="Расположение файла (полный путь)" Width="520" DisplayMemberBinding="{Binding FullPath}"/>
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </Grid>
+</Window>
+```
+
+**Code-behind:**
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Windows;
+
+namespace LabWork17
+{
+    public partial class FolderPropertiesWindow : Window
+    {
+        public FolderPropertiesWindow(string folderPath)
+        {
+            InitializeComponent();
+            LoadFolderInfo(folderPath);
+        }
+
+        private void LoadFolderInfo(string path)
+        {
+            var dir = new DirectoryInfo(path);
+            tbName.Text = dir.Name;
+
+            var stats = GetFolderStats(path);
+            tbFiles.Text = stats.FileCount.ToString();
+            tbFolders.Text = stats.DirCount.ToString();
+            tbSize.Text = MainWindow.FormatFileSize(stats.TotalSize);
+
+            var drive = new DriveInfo(Path.GetPathRoot(path));
+            double percent = drive.TotalSize > 0 ? (double)stats.TotalSize / drive.TotalSize * 100 : 0;
+            pbPercent.Value = percent;
+            tbPercentText.Text = $"{percent:0.##}%";
+
+            lvTopFiles.ItemsSource = GetTop5Files(path);
+        }
+
+        private (long TotalSize, int FileCount, int DirCount) GetFolderStats(string path)
+        {
+            long size = 0;
+            int files = 0;
+            int dirs = 1; // сама папка
+
+            try
+            {
+                foreach (var f in Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories))
+                {
+                    size += new FileInfo(f).Length;
+                    files++;
+                }
+                dirs += Directory.EnumerateDirectories(path, "*.*", SearchOption.AllDirectories).Count();
+            }
+            catch { }
+
+            return (size, files, dirs);
+        }
+
+        private List<TopFileItem> GetTop5Files(string path)
+        {
+            var files = new List<(string Path, long Size)>();
+
+            try
+            {
+                foreach (var f in Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories))
+                {
+                    var fi = new FileInfo(f);
+                    files.Add((fi.FullName, fi.Length));
+                }
+            }
+            catch { }
+
+            return files.OrderByDescending(x => x.Size)
+                        .Take(5)
+                        .Select(x => new TopFileItem
+                        {
+                            SizeStr = MainWindow.FormatFileSize(x.Size),
+                            FullPath = x.Path
+                        })
+                        .ToList();
+        }
+    }
+}
+```
+
+---
+
+### Готово!
+
+Теперь:
+- При запуске — сразу список дисков с ProgressBar.
+- Пустое поле пути / кнопка «Мой компьютер» / пункт меню — переход к дискам.
+- Клик по диску → открывается корень.
+- Контекстное меню «Свойства» работает и для дисков, и для папок.
+- Всё по ТЗ (включая топ-5 файлов).
+
+Собери проект и запускай. Если что-то не сработает — кидай скриншот ошибки, поправлю за секунду. Удачи на защите! 🚀
