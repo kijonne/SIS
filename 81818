@@ -1,0 +1,26 @@
+// ДВОЙНОЙ КЛИК (самое важное!)
+private void LvFiles_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+{
+    if (lvFiles.SelectedItem is not FileItem item) return;
+
+    if (item.IsDirectory || item.IsDrive)   // ← сюда добавил IsDrive
+    {
+        LoadDirectory(item.FullPath);        // ← всегда переключаемся в обычный вид папок
+    }
+    else
+    {
+        // открытие файла (как было в 17-й)
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = item.FullPath,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Не удалось открыть файл:\n{ex.Message}");
+        }
+    }
+}
