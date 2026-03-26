@@ -1,0 +1,40 @@
+// === ВОССТАНАВЛИВАЕМ ТОЧНО ТОТ ВИД, ЧТО БЫЛ В 17-Й ЛАБЕ ===
+private void SetNormalFolderView()
+{
+    var gv = new GridView();
+
+    // 1. Иконка
+    var iconCol = new GridViewColumn { Header = "", Width = 30 };
+    var iconFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.Image));
+    iconFactory.SetValue(System.Windows.Controls.Image.SourceProperty, new System.Windows.Data.Binding("Image"));
+    iconFactory.SetValue(System.Windows.Controls.Image.WidthProperty, 24.0);
+    iconFactory.SetValue(System.Windows.Controls.Image.HeightProperty, 24.0);
+    iconCol.CellTemplate = new DataTemplate { VisualTree = iconFactory };
+    gv.Columns.Add(iconCol);
+
+    // 2. Имя
+    gv.Columns.Add(new GridViewColumn
+    {
+        Header = "Имя",
+        Width = 300,
+        DisplayMemberBinding = new System.Windows.Data.Binding("Name")
+    });
+
+    // 3. Дата изменения
+    gv.Columns.Add(new GridViewColumn
+    {
+        Header = "Дата изменения",
+        Width = 150,
+        DisplayMemberBinding = new System.Windows.Data.Binding("LastWriteTime")
+    });
+
+    // 4. Размер
+    gv.Columns.Add(new GridViewColumn
+    {
+        Header = "Размер",
+        Width = 100,
+        DisplayMemberBinding = new System.Windows.Data.Binding("Size")
+    });
+
+    lvFiles.View = gv;
+}
