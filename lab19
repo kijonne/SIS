@@ -1,0 +1,169 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+
+namespace LabWork19
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            if (args.Length == 0)
+            {
+                Console.WriteLine("Укажите путь к каталогу.");
+                return;
+            }
+
+            string directory = args[0];
+
+            if (!Directory.Exists(directory))
+            {
+                Console.WriteLine("Каталог не существует.");
+                return;
+            }
+
+            string mode = args.Length > 1 ? args[1].ToLower() : "";
+
+            switch (mode)
+            {
+                case "-date":
+                    SortByDate(directory);
+                    break;
+                case "-ext":
+                    SortByExtension(directory);
+                    break;
+                case "-flatten":
+                    FlattenDirectory(directory);
+                    break;
+                case "-dup":
+                    bool recursive = args.Length > 2 && args[2] == "-r";
+                    bool deleteDups = args.Length > 3 && args[3] == "-delete";
+                    FindDuplicates(directory, recursive, deleteDups);
+                    break;
+                default:
+                    SortByDate(directory); // по умолчанию — задание 5.1
+                    break;
+            }
+        }
+
+        // 5.1 Сортировка по дате создания (/Год/Месяц/День)
+        static void SortByDate(string rootDir)
+        {
+            foreach (string file in Directory.GetFiles(rootDir))
+            {
+                FileInfo fi = new FileInfo(file);
+                DateTime dt = fi.CreationTime;
+
+                string target = Path.Combine(
+                    rootDir,
+                    dt.Year.ToString(),
+                    dt.Month.ToString("D2"),
+                    dt.Day.ToString("D2"),
+                    fi.Name);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                fi.MoveTo(target, true);
+            }
+        }
+
+        // 5.2 Сортировка по расширению
+        static void SortByExtension(string rootDir)
+        {
+            foreach (string file in Directory.GetFiles(rootDir))
+            {
+                FileInfo fi = new FileInfo(file);
+                string ext = fi.Extension.ToUpperInvariant().TrimStart('.');
+                if (string.IsNullOrEmpty(ext)) ext = "NOEXT";
+
+                string target = Path.Combine(rootDir, ext, fi.Name);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                fi.MoveTo(target, true);
+            }
+        }
+
+        // 5.3 Flattening + удаление пустых папок
+        static void FlattenDirectory(string rootDir)
+        {
+            var allFiles = Directory.GetFiles(rootDir, "*.*", SearchOption.AllDirectories);
+
+            foreach (string file in allFiles)
+            {
+                if (Path.GetDirectoryName(file) == rootDir) continue; // уже в корне
+
+                FileInfo fi = new FileInfo(file);
+                string target = Path.Combine(rootDir, fi.Name);
+
+                int n = 1;
+                string name = Path.GetFileNameWithoutExtension(fi.Name);
+                string ext = fi.Extension;
+
+                while (File.Exists(target))
+                {
+                    target = Path.Combine(rootDir, $"{name}({n}){ext}");
+                    n++;
+                }
+
+                fi.MoveTo(target);
+            }
+
+            // Удаляем пустые папки
+            DeleteEmptyDirs(rootDir);
+        }
+
+        static void DeleteEmptyDirs(string dir)
+        {
+            foreach (string sub in Directory.GetDirectories(dir))
+                DeleteEmptyDirs(sub);
+
+            if (Directory.GetFiles(dir).Length == 0 && Directory.GetDirectories(dir).Length == 0)
+                Directory.Delete(dir);
+        }
+
+        // 5.4 + 5.5 Поиск дубликатов по SHA256
+        static void FindDuplicates(string rootDir, bool recursive, bool deleteDups)
+        {
+            var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            var files = Directory.GetFiles(rootDir, "*.*", option);
+
+            var hashDict = new Dictionary<string, List<string>>();
+
+            using (var sha = SHA256.Create())
+            {
+                foreach (string f in files)
+                {
+                    string hash = GetHash(f, sha);
+                    if (!hashDict.ContainsKey(hash))
+                        hashDict[hash] = new List<string>();
+                    hashDict[hash].Add(f);
+                }
+            }
+
+            foreach (var pair in hashDict)
+            {
+                if (pair.Value.Count > 1)
+                {
+                    foreach (string path in pair.Value)
+                        Console.WriteLine(path);
+
+                    if (deleteDups)
+                    {
+                        for (int i = 1; i < pair.Value.Count; i++)
+                            File.Delete(pair.Value[i]);
+                    }
+                }
+            }
+        }
+
+        static string GetHash(string filePath, SHA256 sha)
+        {
+            using (var stream = File.OpenRead(filePath))
+            {
+                byte[] hash = sha.ComputeHash(stream);
+                return BitConverter.ToString(hash).Replace("-", "").ToLower();
+            }
+        }
+    }
+}
