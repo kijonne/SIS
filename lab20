@@ -1,0 +1,311 @@
+Вот подробное объяснение **что куда писать** и **зачем** это нужно в лабораторной работе №20.
+
+Я разобью всё по шагам, чтобы тебе было максимально понятно и удобно делать отчёт.
+
+### Структура проекта WPF
+
+1. **Создай новый проект**  
+   → Visual Studio → **WPF App** (.NET Framework 4.8 или .NET 6/8)  
+   Назови проект, например: **ProcessMonitor**
+
+2. **Файлы, которые нужно создать/изменить:**
+
+#### 1. MainWindow.xaml — главное окно
+(Здесь вся визуальная часть)
+
+```xml
+<Window x:Class="ProcessMonitor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Монитор процессов и приложений" 
+        Height="650" Width="950">
+
+    <Grid>
+        <!-- Главное меню -->
+        <Menu Height="25" VerticalAlignment="Top">
+            <MenuItem Header="Файл">
+                <MenuItem Header="Запустить новую задачу" Click="MenuStartNew_Click"/>
+                <Separator/>
+                <MenuItem Header="Выход" Click="MenuExit_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- Строка состояния (количество процессов) -->
+        <StatusBar Height="25" VerticalAlignment="Bottom">
+            <StatusBarItem>
+                <TextBlock x:Name="tbStatus" Text="Запущенных процессов: 0" 
+                           FontWeight="Bold" Margin="10,0"/>
+            </StatusBarItem>
+        </StatusBar>
+
+        <!-- TabControl занимает почти всё пространство -->
+        <TabControl Margin="0,25,0,25" x:Name="tabControl">
+
+            <!-- Вкладка "Процессы" -->
+            <TabItem Header="Процессы">
+                <ListView x:Name="lvProcesses" Margin="10">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="Имя процесса" Width="280" DisplayMemberBinding="{Binding ProcessName}"/>
+                            <GridViewColumn Header="ID" Width="90" DisplayMemberBinding="{Binding Id}"/>
+                            <GridViewColumn Header="Память (МБ)" Width="130" DisplayMemberBinding="{Binding MemoryMB}"/>
+                        </GridView>
+                    </ListView.View>
+                    <ListView.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Снять задачу" Click="KillProcess_Click"/>
+                        </ContextMenu>
+                    </ListView.ContextMenu>
+                </ListView>
+            </TabItem>
+
+            <!-- Вкладка "Приложения" -->
+            <TabItem Header="Приложения">
+                <ListView x:Name="lvApplications" Margin="10">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="Приложение" Width="400" DisplayMemberBinding="{Binding AppName}"/>
+                            <GridViewColumn Header="Время запуска" Width="220" DisplayMemberBinding="{Binding StartTime}"/>
+                        </GridView>
+                    </ListView.View>
+                    <ListView.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Снять задачу" Click="KillProcess_Click"/>
+                        </ContextMenu>
+                    </ListView.ContextMenu>
+                </ListView>
+            </TabItem>
+
+        </TabControl>
+    </Grid>
+</Window>
+```
+
+#### 2. MainWindow.xaml.cs — логика главного окна
+
+```csharp
+using System;
+using System.Diagnostics;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
+
+namespace ProcessMonitor
+{
+    public partial class MainWindow : Window
+    {
+        private DispatcherTimer updateTimer;
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            SetupTimer();
+            UpdateAllData();                    // первое обновление при запуске
+        }
+
+        // Настраиваем таймер для автоматического обновления каждые 3 секунды
+        private void SetupTimer()
+        {
+            updateTimer = new DispatcherTimer();
+            updateTimer.Interval = TimeSpan.FromSeconds(3);
+            updateTimer.Tick += (s, e) => UpdateAllData();
+            updateTimer.Start();
+        }
+
+        // Обновляем обе вкладки
+        private void UpdateAllData()
+        {
+            UpdateProcessesList();
+            UpdateApplicationsList();
+        }
+
+        // ====================== ПРОЦЕССЫ ======================
+        private void UpdateProcessesList()
+        {
+            var processes = Process.GetProcesses()
+                .Select(p => new
+                {
+                    ProcessName = p.ProcessName,
+                    Id = p.Id,
+                    MemoryMB = Math.Round(p.WorkingSet64 / (1024.0 * 1024), 2)
+                })
+                .OrderBy(p => p.ProcessName)
+                .ToList();
+
+            lvProcesses.ItemsSource = processes;
+            tbStatus.Text = $"Запущенных процессов: {processes.Count}";
+        }
+
+        // ====================== ПРИЛОЖЕНИЯ ======================
+        private void UpdateApplicationsList()
+        {
+            var apps = Process.GetProcesses()
+                .Where(p => !string.IsNullOrWhiteSpace(p.MainWindowTitle))
+                .Select(p => new
+                {
+                    AppName = p.MainWindowTitle,
+                    StartTime = p.StartTime.ToString("dd.MM.yyyy HH:mm:ss")
+                })
+                .OrderBy(a => a.AppName)
+                .ToList();
+
+            lvApplications.ItemsSource = apps;
+        }
+
+        // Снятие задачи (работает и для процессов, и для приложений)
+        private void KillProcess_Click(object sender, RoutedEventArgs e)
+        {
+            ListView currentList = tabControl.SelectedIndex == 0 ? lvProcesses : lvApplications;
+
+            if (currentList.SelectedItem == null)
+            {
+                MessageBox.Show("Выберите процесс или приложение для завершения.", "Внимание");
+                return;
+            }
+
+            try
+            {
+                dynamic selected = currentList.SelectedItem;
+                int pid = tabControl.SelectedIndex == 0 ? selected.Id : GetPidByWindowTitle(selected.AppName);
+
+                if (pid == 0) return;
+
+                Process process = Process.GetProcessById(pid);
+                process.Kill();
+                process.WaitForExit(1500);
+
+                UpdateAllData();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не удалось завершить процесс:\n{ex.Message}", "Ошибка", 
+                               MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private int GetPidByWindowTitle(string title)
+        {
+            var proc = Process.GetProcesses().FirstOrDefault(p => p.MainWindowTitle == title);
+            return proc?.Id ?? 0;
+        }
+
+        // ====================== МЕНЮ ======================
+        private void MenuStartNew_Click(object sender, RoutedEventArgs e)
+        {
+            var startWindow = new StartProcessWindow();
+            if (startWindow.ShowDialog() == true)
+            {
+                UpdateAllData();
+            }
+        }
+
+        private void MenuExit_Click(object sender, RoutedEventArgs e)
+        {
+            Application.Current.Shutdown();
+        }
+    }
+}
+```
+
+#### 3. Окно запуска новой задачи — StartProcessWindow.xaml
+
+```xml
+<Window x:Class="ProcessMonitor.StartProcessWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Запустить новую задачу" Height="180" Width="500" ResizeMode="NoResize">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Укажите путь к исполняемому файлу (.exe):" Margin="0,0,0,8" FontWeight="Bold"/>
+
+        <DockPanel Grid.Row="1" Margin="0,0,0,15">
+            <Button Content="Обзор..." Width="90" Click="Browse_Click" DockPanel.Dock="Right"/>
+            <TextBox x:Name="tbPath" Margin="0,0,10,0" Height="25"/>
+        </DockPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="OK" Width="90" Margin="5" Click="Ok_Click"/>
+            <Button Content="Отмена" Width="90" Margin="5" Click="Cancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
+```
+
+#### 4. StartProcessWindow.xaml.cs
+
+```csharp
+using Microsoft.Win32;
+using System;
+using System.Diagnostics;
+using System.Windows;
+
+namespace ProcessMonitor
+{
+    public partial class StartProcessWindow : Window
+    {
+        public StartProcessWindow()
+        {
+            InitializeComponent();
+        }
+
+        private void Browse_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog dlg = new OpenFileDialog
+            {
+                Filter = "Приложения (*.exe)|*.exe|Все файлы (*.*)|*.*",
+                Title = "Выберите программу для запуска"
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                tbPath.Text = dlg.FileName;
+            }
+        }
+
+        private void Ok_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(tbPath.Text))
+            {
+                MessageBox.Show("Введите или выберите путь к файлу!", "Ошибка");
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo(tbPath.Text) { UseShellExecute = true });
+                DialogResult = true;
+                Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка запуска:\n{ex.Message}", "Ошибка");
+            }
+        }
+
+        private void Cancel_Click(object sender, RoutedEventArgs e)
+        {
+            DialogResult = false;
+            Close();
+        }
+    }
+}
+```
+
+### Что делать дальше:
+
+1. Создай проект WPF.
+2. Замени содержимое **MainWindow.xaml** и **MainWindow.xaml.cs** на код выше.
+3. Добавь новое окно **StartProcessWindow** (Add → Window) и вставь в него код.
+4. Собери проект (Build → Build Solution).
+5. Запусти и проверь все требования задания.
+
+Хочешь, я сейчас напишу тебе готовый текст для **отчёта** (разделы 7.1–7.4 + ответы на контрольные вопросы)?
+
+Или нужно что-то изменить в коде (например, добавить иконки, цвета, сортировку колонок)? Пиши, что именно доработать.
