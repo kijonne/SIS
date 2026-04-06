@@ -1,0 +1,230 @@
+**Готово!** Я сделал лабораторную работу **точно по заданию** (ничего лишнего не добавил). Проект называется **LabWork21**.
+
+Ниже — **пошаговая инструкция**, что именно создать, куда положить и какой код вставить. Всё максимально просто и понятно.
+
+### 1. Создание проекта
+1. Откройте **Visual Studio**.
+2. Создайте новый проект → **Windows Forms App (.NET Framework)**.
+3. Назовите проект: **`LabWork21`**.
+4. Нажмите **Создать**.
+
+### 2. Добавление нужной ссылки
+1. В **Solution Explorer** правой кнопкой кликните по **References** → **Add Reference**.
+2. Вкладка **Assemblies** → найдите и поставьте галочку напротив **System.Management** → **OK**.
+
+### 3. Настройка формы (дизайнер)
+1. Откройте `Form1.cs [Design]`.
+2. Перетащите на форму элемент **TabControl** из Toolbox.
+3. Выделите TabControl → в Properties установите:
+   - **Dock** = `Fill`
+   - **Name** = `tabControl1`
+4. Добавьте **7 вкладок** (TabPages) и задайте им свойство **Text** точно так:
+
+| № | Text вкладки                  | Название вкладки в коде (не менять!) |
+|---|-------------------------------|--------------------------------------|
+| 1 | Процессор                     | tabPage1                             |
+| 2 | Видеокарта                    | tabPage2                             |
+| 3 | Материнская плата             | tabPage3                             |
+| 4 | Физические диски              | tabPage4                             |
+| 5 | Операционная система          | tabPage5                             |
+| 6 | Сеть                          | tabPage6                             |
+| 7 | Установленные программы       | tabPage7                             |
+
+5. **В каждую вкладку 1–6** перетащите **RichTextBox** и задайте свойства:
+   - **Dock** = `Fill`
+   - **Multiline** = `True`
+   - **ReadOnly** = `True`
+   - **ScrollBars** = `Both`
+
+   Назовите их **точно** так:
+   - Вкладка «Процессор» → `rtbProcessor`
+   - Вкладка «Видеокарта» → `rtbVideoController`
+   - Вкладка «Материнская плата» → `rtbMotherboard`
+   - Вкладка «Физические диски» → `rtbDiskDrive`
+   - Вкладка «Операционная система» → `rtbOperatingSystem`
+   - Вкладка «Сеть» → `rtbNetwork`
+
+6. **В вкладку «Установленные программы»** перетащите **ListBox**:
+   - **Dock** = `Fill`
+   - **Name** = `lbPrograms`
+
+### 4. Код (замените полностью содержимое `Form1.cs`)
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Management;
+using System.Net.NetworkInformation;
+using Microsoft.Win32;
+using System.Windows.Forms;
+
+namespace LabWork21
+{
+    public partial class Form1 : Form
+    {
+        public Form1()
+        {
+            InitializeComponent();
+        }
+
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            LoadProcessor();
+            LoadVideoController();
+            LoadMotherboard();
+            LoadDiskDrive();
+            LoadOperatingSystem();
+            LoadNetwork();
+            LoadInstalledPrograms();
+        }
+
+        // ==================== ПРОЦЕССОР ====================
+        private void LoadProcessor()
+        {
+            rtbProcessor.Clear();
+            var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Processor");
+            int i = 1;
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                rtbProcessor.AppendText($"Процессор {i}:\n");
+                rtbProcessor.AppendText($"Название: {obj["Name"] ?? "N/A"}\n");
+                rtbProcessor.AppendText($"Производитель: {obj["Manufacturer"] ?? "N/A"}\n");
+                rtbProcessor.AppendText($"Макс. частота: {obj["MaxClockSpeed"] ?? "N/A"} MHz\n");
+                rtbProcessor.AppendText($"Ядер: {obj["NumberOfCores"] ?? "N/A"}\n\n");
+                i++;
+            }
+        }
+
+        // ==================== ВИДЕОКАРТА ====================
+        private void LoadVideoController()
+        {
+            rtbVideoController.Clear();
+            var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
+            int i = 1;
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                ulong ram = obj["AdapterRAM"] != null ? Convert.ToUInt64(obj["AdapterRAM"]) : 0;
+                rtbVideoController.AppendText($"Видеокарта {i}:\n");
+                rtbVideoController.AppendText($"Название: {obj["Name"] ?? "N/A"}\n");
+                rtbVideoController.AppendText($"Память: {ram / 1024 / 1024} МБ\n");
+                rtbVideoController.AppendText($"Версия драйвера: {obj["DriverVersion"] ?? "N/A"}\n\n");
+                i++;
+            }
+        }
+
+        // ==================== МАТЕРИНСКАЯ ПЛАТА ====================
+        private void LoadMotherboard()
+        {
+            rtbMotherboard.Clear();
+            var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_MotherboardDevice");
+            int i = 1;
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                rtbMotherboard.AppendText($"Материнская плата {i}:\n");
+                rtbMotherboard.AppendText($"Производитель: {obj["Manufacturer"] ?? "N/A"}\n");
+                rtbMotherboard.AppendText($"Модель: {obj["Product"] ?? "N/A"}\n");
+                rtbMotherboard.AppendText($"Версия: {obj["Version"] ?? "N/A"}\n\n");
+                i++;
+            }
+        }
+
+        // ==================== ФИЗИЧЕСКИЕ ДИСКИ ====================
+        private void LoadDiskDrive()
+        {
+            rtbDiskDrive.Clear();
+            var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_DiskDrive");
+            int i = 1;
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                ulong size = obj["Size"] != null ? Convert.ToUInt64(obj["Size"]) : 0;
+                rtbDiskDrive.AppendText($"Диск {i}:\n");
+                rtbDiskDrive.AppendText($"Модель: {obj["Model"] ?? "N/A"}\n");
+                rtbDiskDrive.AppendText($"Производитель: {obj["Manufacturer"] ?? "N/A"}\n");
+                rtbDiskDrive.AppendText($"Размер: {size / 1024 / 1024 / 1024} ГБ\n");
+                rtbDiskDrive.AppendText($"Серийный номер: {obj["SerialNumber"] ?? "N/A"}\n\n");
+                i++;
+            }
+        }
+
+        // ==================== ОПЕРАЦИОННАЯ СИСТЕМА ====================
+        private void LoadOperatingSystem()
+        {
+            rtbOperatingSystem.Clear();
+            var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_OperatingSystem");
+            int i = 1;
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                ulong memKB = obj["TotalVisibleMemorySize"] != null ? Convert.ToUInt64(obj["TotalVisibleMemorySize"]) : 0;
+                rtbOperatingSystem.AppendText($"Операционная система {i}:\n");
+                rtbOperatingSystem.AppendText($"Название: {obj["Caption"] ?? "N/A"}\n");
+                rtbOperatingSystem.AppendText($"Версия: {obj["Version"] ?? "N/A"}\n");
+                rtbOperatingSystem.AppendText($"Архитектура: {obj["OSArchitecture"] ?? "N/A"}\n");
+                rtbOperatingSystem.AppendText($"ОЗУ: {memKB / 1024} МБ\n\n");
+                i++;
+            }
+        }
+
+        // ==================== СЕТЬ ====================
+        private void LoadNetwork()
+        {
+            rtbNetwork.Clear();
+            rtbNetwork.AppendText("Сетевые адаптеры:\n\n");
+            foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                rtbNetwork.AppendText($"Имя: {nic.Name}\n");
+                rtbNetwork.AppendText($"Описание: {nic.Description}\n");
+                rtbNetwork.AppendText($"Тип: {nic.NetworkInterfaceType}\n");
+                rtbNetwork.AppendText($"Статус: {nic.OperationalStatus}\n");
+                rtbNetwork.AppendText($"Скорость: {nic.Speed / 1_000_000} Мбит/с\n\n");
+            }
+        }
+
+        // ==================== УСТАНОВЛЕННЫЕ ПРОГРАММЫ ====================
+        private void LoadInstalledPrograms()
+        {
+            lbPrograms.Items.Clear();
+            var programs = new List<string>();
+
+            // HKEY_CURRENT_USER
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall"))
+            {
+                if (key != null)
+                    AddProgramsFromKey(key, programs);
+            }
+
+            // HKEY_LOCAL_MACHINE
+            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"))
+            {
+                if (key != null)
+                    AddProgramsFromKey(key, programs);
+            }
+
+            lbPrograms.Items.AddRange(programs.ToArray());
+        }
+
+        private void AddProgramsFromKey(RegistryKey key, List<string> list)
+        {
+            foreach (string subKeyName in key.GetSubKeyNames())
+            {
+                using (RegistryKey subKey = key.OpenSubKey(subKeyName))
+                {
+                    if (subKey != null)
+                    {
+                        string displayName = subKey.GetValue("DisplayName") as string;
+                        if (!string.IsNullOrEmpty(displayName))
+                            list.Add(displayName);
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### 5. Что делать дальше
+- Нажмите **F5** — приложение запустится.
+- Всё отображается автоматически при запуске.
+- Никаких лишних кнопок, меню и окон — **только то, что просили в лабораторной**.
+
+Готово!  
+Если нужно сдать отчёт — просто скопируйте текст лабораторной + скриншоты запущенной программы. Удачи на защите!
