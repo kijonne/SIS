@@ -1,0 +1,258 @@
+**Братан, понял!**  
+Запустить Visual Studio от админа не можешь — не проблема.  
+Сейчас сделаем так, чтобы **программа сама показывала, в чём ошибка** (а не просто молчала).
+
+---
+
+### 1. Сначала собери проект обычным способом
+- Нажми **Ctrl + Shift + B** (Собрать решение)
+
+---
+
+### 2. Запусти программу **от имени администратора** (без Visual Studio)
+1. Открой папку проекта → `bin` → `Debug`
+2. Найди файл **`LabWork21.exe`**
+3. **Правой кнопкой** по нему → **«Запуск от имени администратора»**
+
+Если после этого всё равно пусто — продолжаем.
+
+---
+
+### 3. Замени ВЕСЬ код в файле `MainWindow.xaml.cs`
+
+Полностью удали старый код и вставь этот (он теперь с защитой от ошибок):
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Management;
+using System.Net.NetworkInformation;
+using Microsoft.Win32;
+using System.Windows;
+using System.Linq;
+
+namespace LabWork21
+{
+    public partial class MainWindow : Window
+    {
+        public MainWindow()
+        {
+            InitializeComponent();
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            LoadProcessor();
+            LoadVideoController();
+            LoadMotherboard();
+            LoadDiskDrive();
+            LoadOperatingSystem();
+            LoadNetwork();
+            LoadInstalledPrograms();
+        }
+
+        private void LoadProcessor()
+        {
+            rtbProcessor.Clear();
+            rtbProcessor.AppendText("Загрузка процессора...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Processor");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    rtbProcessor.AppendText($"Процессор {i}:\n");
+                    rtbProcessor.AppendText($"Название: {obj["Name"] ?? "N/A"}\n");
+                    rtbProcessor.AppendText($"Производитель: {obj["Manufacturer"] ?? "N/A"}\n");
+                    rtbProcessor.AppendText($"Макс. частота: {obj["MaxClockSpeed"] ?? "N/A"} MHz\n");
+                    rtbProcessor.AppendText($"Ядер: {obj["NumberOfCores"] ?? "N/A"}\n\n");
+                    i++;
+                }
+                if (i == 1) rtbProcessor.AppendText("Нет данных (WMI не вернул процессоры)");
+            }
+            catch (Exception ex)
+            {
+                rtbProcessor.AppendText($"ОШИБКА: {ex.Message}");
+            }
+        }
+
+        private void LoadVideoController()
+        {
+            rtbVideoController.Clear();
+            rtbVideoController.AppendText("Загрузка видеокарты...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    ulong ram = obj["AdapterRAM"] != null ? Convert.ToUInt64(obj["AdapterRAM"]) : 0;
+                    rtbVideoController.AppendText($"Видеокарта {i}:\n");
+                    rtbVideoController.AppendText($"Название: {obj["Name"] ?? "N/A"}\n");
+                    rtbVideoController.AppendText($"Память: {ram / 1024 / 1024} МБ\n");
+                    rtbVideoController.AppendText($"Версия драйвера: {obj["DriverVersion"] ?? "N/A"}\n\n");
+                    i++;
+                }
+                if (i == 1) rtbVideoController.AppendText("Нет данных");
+            }
+            catch (Exception ex)
+            {
+                rtbVideoController.AppendText($"ОШИБКА: {ex.Message}");
+            }
+        }
+
+        private void LoadMotherboard()
+        {
+            rtbMotherboard.Clear();
+            rtbMotherboard.AppendText("Загрузка материнской платы...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_MotherboardDevice");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    rtbMotherboard.AppendText($"Материнская плата {i}:\n");
+                    rtbMotherboard.AppendText($"Производитель: {obj["Manufacturer"] ?? "N/A"}\n");
+                    rtbMotherboard.AppendText($"Модель: {obj["Product"] ?? "N/A"}\n");
+                    rtbMotherboard.AppendText($"Версия: {obj["Version"] ?? "N/A"}\n\n");
+                    i++;
+                }
+                if (i == 1) rtbMotherboard.AppendText("Нет данных");
+            }
+            catch (Exception ex)
+            {
+                rtbMotherboard.AppendText($"ОШИБКА: {ex.Message}");
+            }
+        }
+
+        private void LoadDiskDrive()
+        {
+            rtbDiskDrive.Clear();
+            rtbDiskDrive.AppendText("Загрузка дисков...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_DiskDrive");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    ulong size = obj["Size"] != null ? Convert.ToUInt64(obj["Size"]) : 0;
+                    rtbDiskDrive.AppendText($"Диск {i}:\n");
+                    rtbDiskDrive.AppendText($"Модель: {obj["Model"] ?? "N/A"}\n");
+                    rtbDiskDrive.AppendText($"Производитель: {obj["Manufacturer"] ?? "N/A"}\n");
+                    rtbDiskDrive.AppendText($"Размер: {size / 1024 / 1024 / 1024} ГБ\n");
+                    rtbDiskDrive.AppendText($"Серийный номер: {obj["SerialNumber"] ?? "N/A"}\n\n");
+                    i++;
+                }
+                if (i == 1) rtbDiskDrive.AppendText("Нет данных");
+            }
+            catch (Exception ex)
+            {
+                rtbDiskDrive.AppendText($"ОШИБКА: {ex.Message}");
+            }
+        }
+
+        private void LoadOperatingSystem()
+        {
+            rtbOperatingSystem.Clear();
+            rtbOperatingSystem.AppendText("Загрузка ОС...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_OperatingSystem");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    ulong memKB = obj["TotalVisibleMemorySize"] != null ? Convert.ToUInt64(obj["TotalVisibleMemorySize"]) : 0;
+                    rtbOperatingSystem.AppendText($"Операционная система {i}:\n");
+                    rtbOperatingSystem.AppendText($"Название: {obj["Caption"] ?? "N/A"}\n");
+                    rtbOperatingSystem.AppendText($"Версия: {obj["Version"] ?? "N/A"}\n");
+                    rtbOperatingSystem.AppendText($"Архитектура: {obj["OSArchitecture"] ?? "N/A"}\n");
+                    rtbOperatingSystem.AppendText($"ОЗУ: {memKB / 1024} МБ\n\n");
+                    i++;
+                }
+                if (i == 1) rtbOperatingSystem.AppendText("Нет данных");
+            }
+            catch (Exception ex)
+            {
+                rtbOperatingSystem.AppendText($"ОШИБКА: {ex.Message}");
+            }
+        }
+
+        private void LoadNetwork()
+        {
+            rtbNetwork.Clear();
+            rtbNetwork.AppendText("Загрузка сети...\n\n");
+            try
+            {
+                rtbNetwork.AppendText("Сетевые адаптеры:\n\n");
+                foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    rtbNetwork.AppendText($"Имя: {nic.Name}\n");
+                    rtbNetwork.AppendText($"Описание: {nic.Description}\n");
+                    rtbNetwork.AppendText($"Тип: {nic.NetworkInterfaceType}\n");
+                    rtbNetwork.AppendText($"Статус: {nic.OperationalStatus}\n");
+                    rtbNetwork.AppendText($"Скорость: {nic.Speed / 1_000_000} Мбит/с\n\n");
+                }
+            }
+            catch (Exception ex)
+            {
+                rtbNetwork.AppendText($"ОШИБКА: {ex.Message}");
+            }
+        }
+
+        private void LoadInstalledPrograms()
+        {
+            lbPrograms.Items.Clear();
+            var programs = new List<string>();
+
+            string[] paths = 
+            {
+                @"Software\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            };
+
+            try
+            {
+                foreach (string path in paths)
+                {
+                    using (var key = Registry.CurrentUser.OpenSubKey(path))
+                        if (key != null) AddProgramsFromKey(key, programs);
+
+                    using (var key = Registry.LocalMachine.OpenSubKey(path))
+                        if (key != null) AddProgramsFromKey(key, programs);
+                }
+
+                foreach (var p in programs.Distinct().OrderBy(x => x))
+                    lbPrograms.Items.Add(p);
+
+                if (lbPrograms.Items.Count == 0)
+                    lbPrograms.Items.Add("Программы не найдены");
+            }
+            catch (Exception ex)
+            {
+                lbPrograms.Items.Add($"ОШИБКА: {ex.Message}");
+            }
+        }
+
+        private void AddProgramsFromKey(RegistryKey key, List<string> list)
+        {
+            foreach (string subKeyName in key.GetSubKeyNames())
+            {
+                using (var subKey = key.OpenSubKey(subKeyName))
+                {
+                    string name = subKey?.GetValue("DisplayName") as string;
+                    if (!string.IsNullOrEmpty(name))
+                        list.Add(name);
+                }
+            }
+        }
+    }
+}
+```
+
+Сохрани → **Ctrl + Shift + B** → запусти `LabWork21.exe` **от имени администратора**.
+
+Теперь в каждой вкладке будет видно либо данные, либо **текст ошибки**.  
+Сделай скриншот того, что сейчас показывается (особенно вкладки «Сеть» и «Процессор»), и кинь сюда.
+
+Жду скрин! Разберёмся за минуту 🔥
