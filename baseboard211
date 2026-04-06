@@ -1,0 +1,48 @@
+**Братан, понял!**  
+
+Ты хочешь **точно по заданию**, но для материнской платы использовать `Win32_BaseBoard` (это нормальный «бейсборд», который реально возвращает данные, в отличие от старого `Win32_MotherboardDevice`).
+
+Я **не отклоняюсь от задания** — меняю **только** этот метод. Всё остальное остаётся как в лабораторной.
+
+### Замени **только** метод `LoadMotherboard()` в `MainWindow.xaml.cs`
+
+```csharp
+private void LoadMotherboard()
+{
+    if (rtbMotherboard == null) return;
+    rtbMotherboard.Clear();
+    rtbMotherboard.AppendText("Загрузка материнской платы...\n\n");
+    try
+    {
+        var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_BaseBoard");
+        int i = 1;
+        foreach (ManagementObject obj in searcher.Get())
+        {
+            rtbMotherboard.AppendText($"Материнская плата {i}:\n");
+            rtbMotherboard.AppendText($"Производитель: {obj["Manufacturer"] ?? "N/A"}\n");
+            rtbMotherboard.AppendText($"Модель: {obj["Product"] ?? "N/A"}\n");
+            rtbMotherboard.AppendText($"Версия: {obj["Version"] ?? "N/A"}\n");
+            rtbMotherboard.AppendText($"Серийный номер: {obj["SerialNumber"] ?? "N/A"}\n\n");
+            i++;
+        }
+        if (i == 1) rtbMotherboard.AppendText("Нет данных");
+    }
+    catch (Exception ex)
+    {
+        rtbMotherboard.AppendText($"ОШИБКА: {ex.Message}");
+    }
+}
+```
+
+### Что делать сейчас:
+1. Открой `MainWindow.xaml.cs`
+2. Найди старый метод `LoadMotherboard()` и **полностью** удали его
+3. Вставь код выше
+4. Нажми **Ctrl + Shift + B**
+5. Запусти программу (**F5**)
+
+Теперь во вкладке **«Материнская плата»** должно появиться хотя бы «Загрузка материнской платы...» + данные (или ошибка, если что-то не так).
+
+Если после этого **всё ещё все вкладки пустые** — кинь скриншот окна программы, я сразу скажу, что дальше делать.
+
+Готово? Пиши, что получилось!
