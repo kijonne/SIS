@@ -1,0 +1,229 @@
+**Братан, понял проблему на 100% 🔥**
+
+Программа запускается, окно есть, но **ничего не заполняется** — это классика WPF: в событии `Loaded` где-то вылетает ошибка (скорее всего `NullReferenceException` — контролы не найдены), а WPF **тихо глотает** её и ничего не показывает.
+
+Сейчас исправим за 1 минуту.
+
+---
+
+### 1. Замени **весь** код в `MainWindow.xaml.cs`
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Management;
+using System.Net.NetworkInformation;
+using Microsoft.Win32;
+using System.Windows;
+using System.Linq;
+
+namespace LabWork21
+{
+    public partial class MainWindow : Window
+    {
+        public MainWindow()
+        {
+            InitializeComponent();
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // ←←← Это сообщение должно появиться сразу при запуске
+                // MessageBox.Show("Loaded сработал! Начинаем загрузку...");   // раскомментируй если хочешь проверить
+
+                LoadProcessor();
+                LoadVideoController();
+                LoadMotherboard();
+                LoadDiskDrive();
+                LoadOperatingSystem();
+                LoadNetwork();
+                LoadInstalledPrograms();
+
+                // MessageBox.Show("Загрузка завершена успешно!");   // раскомментируй чтобы убедиться
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("КРИТИЧЕСКАЯ ОШИБКА при загрузке:\n\n" + ex.Message + 
+                              "\n\nСкопируй это сообщение и кинь мне!", 
+                              "Ошибка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void LoadProcessor()
+        {
+            if (rtbProcessor == null) return;
+            rtbProcessor.Clear();
+            rtbProcessor.AppendText("Загрузка процессора...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_Processor");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    rtbProcessor.AppendText($"Процессор {i}:\nНазвание: {obj["Name"] ?? "N/A"}\nПроизводитель: {obj["Manufacturer"] ?? "N/A"}\nМакс. частота: {obj["MaxClockSpeed"] ?? "N/A"} MHz\nЯдер: {obj["NumberOfCores"] ?? "N/A"}\n\n");
+                    i++;
+                }
+                if (i == 1) rtbProcessor.AppendText("Нет данных");
+            }
+            catch (Exception ex) { rtbProcessor.AppendText($"ОШИБКА: {ex.Message}"); }
+        }
+
+        private void LoadVideoController()
+        {
+            if (rtbVideoController == null) return;
+            rtbVideoController.Clear();
+            rtbVideoController.AppendText("Загрузка видеокарты...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    ulong ram = obj["AdapterRAM"] != null ? Convert.ToUInt64(obj["AdapterRAM"]) : 0;
+                    rtbVideoController.AppendText($"Видеокарта {i}:\nНазвание: {obj["Name"] ?? "N/A"}\nПамять: {ram / 1024 / 1024} МБ\nВерсия драйвера: {obj["DriverVersion"] ?? "N/A"}\n\n");
+                    i++;
+                }
+                if (i == 1) rtbVideoController.AppendText("Нет данных");
+            }
+            catch (Exception ex) { rtbVideoController.AppendText($"ОШИБКА: {ex.Message}"); }
+        }
+
+        private void LoadMotherboard()
+        {
+            if (rtbMotherboard == null) return;
+            rtbMotherboard.Clear();
+            rtbMotherboard.AppendText("Загрузка материнской платы...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_MotherboardDevice");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    rtbMotherboard.AppendText($"Материнская плата {i}:\nПроизводитель: {obj["Manufacturer"] ?? "N/A"}\nМодель: {obj["Product"] ?? "N/A"}\nВерсия: {obj["Version"] ?? "N/A"}\n\n");
+                    i++;
+                }
+                if (i == 1) rtbMotherboard.AppendText("Нет данных");
+            }
+            catch (Exception ex) { rtbMotherboard.AppendText($"ОШИБКА: {ex.Message}"); }
+        }
+
+        private void LoadDiskDrive()
+        {
+            if (rtbDiskDrive == null) return;
+            rtbDiskDrive.Clear();
+            rtbDiskDrive.AppendText("Загрузка дисков...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_DiskDrive");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    ulong size = obj["Size"] != null ? Convert.ToUInt64(obj["Size"]) : 0;
+                    rtbDiskDrive.AppendText($"Диск {i}:\nМодель: {obj["Model"] ?? "N/A"}\nПроизводитель: {obj["Manufacturer"] ?? "N/A"}\nРазмер: {size / 1024 / 1024 / 1024} ГБ\nСерийный номер: {obj["SerialNumber"] ?? "N/A"}\n\n");
+                    i++;
+                }
+                if (i == 1) rtbDiskDrive.AppendText("Нет данных");
+            }
+            catch (Exception ex) { rtbDiskDrive.AppendText($"ОШИБКА: {ex.Message}"); }
+        }
+
+        private void LoadOperatingSystem()
+        {
+            if (rtbOperatingSystem == null) return;
+            rtbOperatingSystem.Clear();
+            rtbOperatingSystem.AppendText("Загрузка ОС...\n\n");
+            try
+            {
+                var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_OperatingSystem");
+                int i = 1;
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    ulong memKB = obj["TotalVisibleMemorySize"] != null ? Convert.ToUInt64(obj["TotalVisibleMemorySize"]) : 0;
+                    rtbOperatingSystem.AppendText($"ОС {i}:\nНазвание: {obj["Caption"] ?? "N/A"}\nВерсия: {obj["Version"] ?? "N/A"}\nАрхитектура: {obj["OSArchitecture"] ?? "N/A"}\nОЗУ: {memKB / 1024} МБ\n\n");
+                    i++;
+                }
+                if (i == 1) rtbOperatingSystem.AppendText("Нет данных");
+            }
+            catch (Exception ex) { rtbOperatingSystem.AppendText($"ОШИБКА: {ex.Message}"); }
+        }
+
+        private void LoadNetwork()
+        {
+            if (rtbNetwork == null) return;
+            rtbNetwork.Clear();
+            rtbNetwork.AppendText("Загрузка сети...\n\n");
+            try
+            {
+                foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    rtbNetwork.AppendText($"Имя: {nic.Name}\nОписание: {nic.Description}\nТип: {nic.NetworkInterfaceType}\nСтатус: {nic.OperationalStatus}\nСкорость: {nic.Speed / 1_000_000} Мбит/с\n\n");
+                }
+            }
+            catch (Exception ex) { rtbNetwork.AppendText($"ОШИБКА: {ex.Message}"); }
+        }
+
+        private void LoadInstalledPrograms()
+        {
+            if (lbPrograms == null) return;
+            lbPrograms.Items.Clear();
+            var programs = new List<string>();
+
+            string[] paths = 
+            {
+                @"Software\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+            };
+
+            try
+            {
+                foreach (string path in paths)
+                {
+                    using (var key = Registry.CurrentUser.OpenSubKey(path))
+                        if (key != null) AddProgramsFromKey(key, programs);
+
+                    using (var key = Registry.LocalMachine.OpenSubKey(path))
+                        if (key != null) AddProgramsFromKey(key, programs);
+                }
+
+                foreach (var p in programs.Distinct().OrderBy(x => x))
+                    lbPrograms.Items.Add(p);
+
+                if (lbPrograms.Items.Count == 0)
+                    lbPrograms.Items.Add("Программы не найдены");
+            }
+            catch (Exception ex)
+            {
+                lbPrograms.Items.Add($"ОШИБКА: {ex.Message}");
+            }
+        }
+
+        private void AddProgramsFromKey(RegistryKey key, List<string> list)
+        {
+            foreach (string subKeyName in key.GetSubKeyNames())
+            {
+                using (var subKey = key.OpenSubKey(subKeyName))
+                {
+                    string name = subKey?.GetValue("DisplayName") as string;
+                    if (!string.IsNullOrEmpty(name))
+                        list.Add(name);
+                }
+            }
+        }
+    }
+}
+```
+
+### Что делать дальше:
+1. Полностью замени код в `MainWindow.xaml.cs`
+2. **Ctrl + Shift + B** (собрать)
+3. Запусти обычным способом (F5)
+
+Сразу после запуска **должно** выскочить окно с ошибкой (если она есть) — **сфоткай его и кинь сюда**.
+
+Если ничего не выскочило и всё равно пусто — раскомментируй две строки с `MessageBox.Show` (я их отметил), пересобери и запусти снова.
+
+Кидай скрин — разберёмся за 10 секунд.  
+Сейчас точно увидим, в чём дело! 🚀o
