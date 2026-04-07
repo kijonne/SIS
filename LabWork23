@@ -1,0 +1,169 @@
+**✅ Готово, братан!**  
+Сделал **лабораторную работу №23** точно по описанию.
+
+**Проект:** `LabWork23` (одно решение, одно консольное приложение)  
+Всё в одном `Program.cs` — как в предыдущей лабе.  
+Сделал **консольное приложение** (как явно написано в п.5.1), хотя в п.6.1 написано «оконное» — это, как и в прошлой лабе, ошибка составителя.
+
+### Как создать проект (пошагово):
+
+1. Открой **Visual Studio**.
+2. `File` → `New` → `Project…`
+3. Выбери **Console App** → **.NET Framework** (рекомендую 4.7.2 или выше)  
+   Название проекта: **`LabWork23`**  
+   Название решения: **`LabWork23`**
+4. Нажми **Create**.
+5. **Полностью замени** содержимое файла `Program.cs` на код ниже.
+6. `Build` → `Build Solution`.
+7. Запускай: `Ctrl + F5`.
+
+### Полный код Program.cs
+
+```csharp
+using System;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace LabWork23
+{
+    class Program
+    {
+        private static int processed = 0;           // сколько изображений уже обработано
+        private static int total = 0;               // общее количество изображений
+        private static readonly object consoleLock = new object();  // для синхронизации вывода
+
+        static void Main(string[] args)
+        {
+            Console.Title = "Лабораторная работа №23";
+            Console.WriteLine("=== Лабораторная работа №23 ===");
+            Console.WriteLine("Инверсия цветов изображений (многопоточно + прогресс-бар)\n");
+
+            // 1. Запрашиваем путь к папке
+            Console.Write("Введите путь к папке с изображениями: ");
+            string inputFolder = Console.ReadLine()?.Trim().Trim('"');
+
+            if (string.IsNullOrEmpty(inputFolder) || !Directory.Exists(inputFolder))
+            {
+                Console.WriteLine("Ошибка: папка не найдена!");
+                Console.ReadKey();
+                return;
+            }
+
+            // 2. Создаём папку для результата
+            string outputFolder = Path.Combine(
+                Path.GetDirectoryName(inputFolder) ?? "",
+                "Inverted_" + Path.GetFileName(inputFolder));
+
+            Directory.CreateDirectory(outputFolder);
+            Console.WriteLine($"Папка для результата: {outputFolder}\n");
+
+            // 3. Берём все изображения
+            string[] imageExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif" };
+            var files = Directory.GetFiles(inputFolder)
+                                 .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLower()))
+                                 .ToArray();
+
+            total = files.Length;
+            processed = 0;
+
+            if (total == 0)
+            {
+                Console.WriteLine("В папке нет поддерживаемых изображений!");
+                Console.ReadKey();
+                return;
+            }
+
+            Console.WriteLine($"Найдено изображений: {total}");
+            Console.WriteLine("Обработка начата...\n");
+
+            // 4. Многопоточная обработка через Parallel.ForEach
+            Parallel.ForEach(files, file =>
+            {
+                try
+                {
+                    string fileName = Path.GetFileName(file);
+                    string outputPath = Path.Combine(outputFolder, fileName);
+
+                    using (Bitmap bitmap = new Bitmap(file))
+                    {
+                        for (int x = 0; x < bitmap.Width; x++)
+                        {
+                            for (int y = 0; y < bitmap.Height; y++)
+                            {
+                                Color original = bitmap.GetPixel(x, y);
+                                Color inverted = Color.FromArgb(
+                                    255 - original.R,
+                                    255 - original.G,
+                                    255 - original.B);
+
+                                bitmap.SetPixel(x, y, inverted);
+                            }
+                        }
+                        bitmap.Save(outputPath);
+                    }
+
+                    // Увеличиваем счётчик потокобезопасно
+                    Interlocked.Increment(ref processed);
+
+                    // Показываем прогресс (синхронизировано lock)
+                    ShowProgressBar();
+                }
+                catch (Exception ex)
+                {
+                    // Если одно изображение упало — не ломаем всю обработку
+                    lock (consoleLock)
+                    {
+                        Console.WriteLine($"\nОшибка при обработке {Path.GetFileName(file)}: {ex.Message}");
+                    }
+                }
+            });
+
+            // Финальный прогресс 100%
+            ShowProgressBar(true);
+            Console.WriteLine("\n\nОбработка завершена успешно!");
+            Console.WriteLine($"Результат сохранён в папку: {outputFolder}");
+            Console.WriteLine("\nНажмите любую клавишу для выхода...");
+            Console.ReadKey();
+        }
+
+        // Показ прогресс-бара (с lock и \r для перезаписи строки)
+        private static void ShowProgressBar(bool final = false)
+        {
+            lock (consoleLock)
+            {
+                int percent = total > 0 ? (processed * 100) / total : 0;
+                int barLength = 30;
+                int filled = (percent * barLength) / 100;
+
+                string bar = new string('#', filled) + new string('-', barLength - filled);
+
+                Console.Write($"\rПрогресс: [{bar}] {percent}%  ({processed}/{total})");
+            }
+        }
+    }
+}
+```
+
+### Как тестировать:
+1. Создай папку с несколькими картинками (jpg/png/bmp).
+2. Запусти программу (`Ctrl+F5`).
+3. Введи путь к папке.
+4. Посмотри, как работает **Parallel.ForEach** + **прогресс-бар** в реальном времени.
+5. В папке появится новая папка `Inverted_НазваниеПапки` с инвертированными изображениями.
+
+Всё сделано **точно по заданию**:
+- `Parallel.ForEach` — многопоточная обработка.
+- `Interlocked.Increment` — потокобезопасное увеличение счётчика.
+- `lock (consoleLock)` — синхронизация вывода прогресс-бара.
+
+Если нужно:
+- сделать отдельный проект `Task1` (как в прошлой лабе)
+- добавить WinForms-версию
+- сделать ответы на контрольные вопросы 8.1–8.2
+
+— просто скажи, сделаю за минуту.
+
+Удачи с защитой! 🔥
