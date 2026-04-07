@@ -1,0 +1,155 @@
+Конечно!
+
+**Program.cs**
+
+```csharp
+using System;
+using System.Drawing;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace LabWork23
+{
+    class Program
+    {
+        private static readonly object _consoleLock = new object();
+
+        static void Main(string[] args)
+        {
+            string inputFolder;
+            string outputFolder;
+
+            if (args.Length >= 2)
+            {
+                inputFolder = args[0];
+                outputFolder = args[1];
+            }
+            else
+            {
+                Console.Write("Введите путь к папке с изображениями: ");
+                inputFolder = Console.ReadLine()?.Trim() ?? string.Empty;
+
+                Console.Write("Введите путь к выходной папке: ");
+                outputFolder = Console.ReadLine()?.Trim() ?? string.Empty;
+            }
+
+            if (!Directory.Exists(inputFolder))
+            {
+                Console.WriteLine($"Ошибка: папка '{inputFolder}' не существует.");
+                return;
+            }
+
+            string[] supportedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff" };
+            string[] imageFiles = Directory.GetFiles(inputFolder);
+            var filteredFiles = Array.FindAll(imageFiles, f =>
+                Array.Exists(supportedExtensions, ext =>
+                    ext.Equals(Path.GetExtension(f), StringComparison.OrdinalIgnoreCase)));
+
+            if (filteredFiles.Length == 0)
+            {
+                Console.WriteLine("В указанной папке не найдено ни одного изображения.");
+                return;
+            }
+
+            Directory.CreateDirectory(outputFolder);
+
+            int totalFiles = filteredFiles.Length;
+            int processedCount = 0;
+
+            Console.WriteLine($"Найдено изображений: {totalFiles}");
+            Console.WriteLine("Начало обработки...\n");
+
+            int progressBarRow = Console.CursorTop;
+            PrintProgressBar(0, totalFiles, progressBarRow);
+
+            Parallel.ForEach(filteredFiles, filePath =>
+            {
+                try
+                {
+                    using Bitmap original = new Bitmap(filePath);
+                    Bitmap inverted = new Bitmap(original.Width, original.Height);
+
+                    for (int y = 0; y < original.Height; y++)
+                    {
+                        for (int x = 0; x < original.Width; x++)
+                        {
+                            Color pixel = original.GetPixel(x, y);
+
+                            Color invertedColor = Color.FromArgb(
+                                pixel.A,
+                                255 - pixel.R,
+                                255 - pixel.G,
+                                255 - pixel.B
+                            );
+
+                            inverted.SetPixel(x, y, invertedColor);
+                        }
+                    }
+
+                    string fileName = Path.GetFileName(filePath);
+                    string outputPath = Path.Combine(outputFolder, fileName);
+                    inverted.Save(outputPath);
+                    inverted.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    lock (_consoleLock)
+                    {
+                        int savedRow = Console.CursorTop;
+                        Console.SetCursorPosition(0, progressBarRow + 2);
+                        Console.WriteLine($"Ошибка: '{Path.GetFileName(filePath)}': {ex.Message}");
+                        Console.SetCursorPosition(0, savedRow);
+                    }
+                }
+
+                int current = Interlocked.Increment(ref processedCount);
+
+                lock (_consoleLock)
+                {
+                    PrintProgressBar(current, totalFiles, progressBarRow);
+                }
+            });
+
+            Console.SetCursorPosition(0, progressBarRow + 2);
+            Console.WriteLine();
+            Console.WriteLine($"Готово! Обработано: {processedCount} из {totalFiles}");
+            Console.WriteLine($"Результаты сохранены в: {Path.GetFullPath(outputFolder)}");
+        }
+
+        static void PrintProgressBar(int current, int total, int row)
+        {
+            const int barWidth = 40;
+
+            double percent = total == 0 ? 100.0 : (double)current / total * 100.0;
+            int filled = total == 0 ? barWidth : (int)((double)current / total * barWidth);
+
+            string bar = new string('█', filled) + new string('░', barWidth - filled);
+
+            Console.SetCursorPosition(0, row);
+            Console.Write($"[{bar}] {percent,6:F1}%  ({current}/{total})  ");
+        }
+    }
+}
+```
+
+---
+
+**LabWork23.csproj**
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>
+```
