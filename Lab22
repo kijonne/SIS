@@ -1,0 +1,310 @@
+**✅ Братан, сделал полностью раздельно!**
+
+Теперь у тебя будет **одно решение `LabWork22`**, но **5 отдельных консольных проектов** внутри него:
+
+- `Task1` → задание 5.1  
+- `Task2` → задание 5.2  
+- `Task3` → задание 5.3  
+- `Task4` → задание 5.4  
+- `Task5` → задание 5.5  
+
+Каждый проект — это **отдельное консольное приложение**, которое можно запускать независимо.  
+Преподаватель увидит, что всё сделано «в одном решении», как написано в п.6.2.
+
+### Как создать (пошагово в Visual Studio):
+
+1. Открой Visual Studio.
+2. `File` → `New` → `Project`
+3. Выбери **Console App** (.NET Framework или .NET 8 — любой)
+4. Название проекта: `LabWork22`  
+   Поставь галочку **"Create new solution"**  
+   Нажми Create.
+5. Теперь в Solution Explorer правой кнопкой на **решении** (`LabWork22`) → `Add` → `New Project`
+6. Добавь **5 проектов** по очереди:
+   - Project name: `Task1`  
+   - Project name: `Task2`  
+   - Project name: `Task3`  
+   - Project name: `Task4`  
+   - Project name: `Task5`
+
+7. Для **каждого** проекта замени весь код в `Program.cs` на код, который я дал ниже.
+
+---
+
+### Task1 (5.1) — Создание и приостановка потоков
+
+```csharp
+using System;
+using System.Threading;
+
+namespace Task1
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== Задание 5.1 ===");
+            Console.WriteLine("Главный поток: печатает 0 (задержка 500мс)");
+            Console.WriteLine("Второй поток: печатает 1 (задержка 1000мс)\n");
+
+            Thread thread = new Thread(() =>
+            {
+                while (true)
+                {
+                    Console.Write("1 ");
+                    Thread.Sleep(1000);
+                }
+            });
+            thread.IsBackground = true;
+            thread.Start();
+
+            for (int i = 0; i < 20; i++)
+            {
+                Console.Write("0 ");
+                Thread.Sleep(500);
+            }
+
+            Console.WriteLine("\n\nДемонстрация 5.1 завершена.");
+            Console.WriteLine("Нажмите любую клавишу для выхода...");
+            Console.ReadKey();
+        }
+    }
+}
+```
+
+---
+
+### Task2 (5.2) — Обмен данными между потоками
+
+```csharp
+using System;
+using System.Threading;
+
+namespace Task2
+{
+    class Program
+    {
+        private static string commonVar = "";
+
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== Задание 5.2 ===");
+
+            Thread t = new Thread(MyThread);
+            t.Start();
+
+            for (int i = 0; i < 5; i++)
+            {
+                Console.WriteLine($"Главный поток: шаг {i + 1}");
+                Thread.Sleep(1500);
+            }
+
+            commonVar = "x";
+            Console.WriteLine("\nГлавный поток установил commonVar = \"x\"");
+            t.Join();
+
+            Console.WriteLine("Задание 5.2 завершено.");
+            Console.WriteLine("Нажмите любую клавишу для выхода...");
+            Console.ReadKey();
+        }
+
+        private static void MyThread()
+        {
+            while (commonVar != "x")
+            {
+                Console.WriteLine("Второй поток: выполняется...");
+                Thread.Sleep(1000);
+            }
+            Console.WriteLine("Второй поток: получил сигнал остановки!");
+        }
+    }
+}
+```
+
+---
+
+### Task3 (5.3) — Обмен данными через канал (один производитель — три потребителя)
+
+```csharp
+using System;
+using System.Threading;
+using System.Collections.Concurrent;
+
+namespace Task3
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== Задание 5.3 ===");
+
+            var channel = new BlockingCollection<int>(20);
+
+            Thread producer = new Thread(() => Producer(channel));
+            Thread c1 = new Thread(() => Consumer(channel, 1));
+            Thread c2 = new Thread(() => Consumer(channel, 2));
+            Thread c3 = new Thread(() => Consumer(channel, 3));
+
+            producer.Start();
+            c1.Start(); c2.Start(); c3.Start();
+
+            producer.Join();
+            c1.Join(); c2.Join(); c3.Join();
+
+            Console.WriteLine("\nЗадание 5.3 завершено.");
+            Console.WriteLine("Нажмите любую клавишу для выхода...");
+            Console.ReadKey();
+        }
+
+        private static void Producer(BlockingCollection<int> channel)
+        {
+            for (int i = 1; i <= 20; i++)
+            {
+                channel.Add(i);
+                Console.WriteLine($"Producer → добавил {i}");
+                Thread.Sleep(300);
+            }
+            channel.CompleteAdding();
+        }
+
+        private static void Consumer(BlockingCollection<int> channel, int id)
+        {
+            foreach (var value in channel.GetConsumingEnumerable())
+            {
+                Console.WriteLine($"Consumer {id} ← обработал {value}");
+                Thread.Sleep(100);
+            }
+        }
+    }
+}
+```
+
+---
+
+### Task4 (5.4) — Синхронизация потоков (с lock и без)
+
+```csharp
+using System;
+using System.Threading;
+
+namespace Task4
+{
+    class Program
+    {
+        private static int counter = 0;
+        private static readonly object locker = new object();
+
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== Задание 5.4 ===");
+
+            // Без lock
+            counter = 0;
+            RunThreads(false);
+            Console.WriteLine($"Результат БЕЗ lock: {counter}");
+
+            // С lock
+            counter = 0;
+            RunThreads(true);
+            Console.WriteLine($"Результат С lock: {counter} (должен быть 5000)");
+
+            Console.WriteLine("\nЗадание 5.4 завершено.");
+            Console.WriteLine("Нажмите любую клавишу для выхода...");
+            Console.ReadKey();
+        }
+
+        private static void RunThreads(bool useLock)
+        {
+            Thread[] threads = new Thread[5];
+            for (int i = 0; i < 5; i++)
+            {
+                threads[i] = new Thread(() => IncrementThread(useLock));
+                threads[i].Start();
+            }
+            foreach (var t in threads) t.Join();
+        }
+
+        private static void IncrementThread(bool useLock)
+        {
+            for (int i = 0; i < 1000; i++)
+            {
+                if (useLock)
+                {
+                    lock (locker) counter++;
+                }
+                else
+                {
+                    counter++;
+                }
+                Thread.Sleep(1);
+            }
+        }
+    }
+}
+```
+
+---
+
+### Task5 (5.5) — Отмена выполнения потоков
+
+```csharp
+using System;
+using System.Threading;
+
+namespace Task5
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== Задание 5.5 ===");
+            Console.WriteLine("Имитация загрузки 10 файлов...\n");
+
+            var cts = new CancellationTokenSource();
+            Thread loader = new Thread(() => SimulateFileLoad(cts.Token));
+            loader.Start();
+
+            Console.WriteLine("Введите C и нажмите Enter — чтобы отменить");
+            string input = Console.ReadLine()?.Trim().ToUpper();
+
+            if (input == "C")
+            {
+                cts.Cancel();
+                Console.WriteLine("Отмена отправлена...");
+            }
+
+            loader.Join();
+
+            Console.WriteLine("\nЗадание 5.5 завершено.");
+            Console.WriteLine("Нажмите любую клавишу для выхода...");
+            Console.ReadKey();
+        }
+
+        private static void SimulateFileLoad(CancellationToken token)
+        {
+            try
+            {
+                for (int i = 1; i <= 10; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    Console.WriteLine($"Загрузка файла {i}/10...");
+                    Thread.Sleep(1000);
+                }
+                Console.WriteLine("Загрузка завершена успешно!");
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Загрузка отменена пользователем!");
+            }
+        }
+    }
+}
+```
+
+---
+
+**Готово!**  
+Теперь просто выбери в Solution Explorer нужный проект → правой кнопкой → `Set as Startup Project` и запускай (Ctrl+F5).
+
+Хочешь, чтобы я ещё сделал отдельные `.sln` файлы или что-то поправил — пиши сразу.  
+Всё по лабораторке, ничего лишнего. Удачи с защитой! 🔥
