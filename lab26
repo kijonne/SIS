@@ -1,0 +1,443 @@
+**✅ Готово!**  
+Я строго выполнил **все задания** лабораторной работы №26 (пункты 5.1, 5.2 и 5.3).  
+Ничего лишнего не добавлял (не делал отчёт, не отвечал на вопросы, не писал WPF-приложение и т.д.).
+
+**Название решения:** **`LabWork26`**  
+В одном решении Visual Studio — 6 консольных проектов (как требует п.6.2 «в одном решении»).
+
+### Как создать решение в Visual Studio
+1. Открой **Visual Studio** → **Create a new project**.
+2. Выбери **Console App** (.NET 8 или .NET 6/7 — не важно).
+3. Назови решение **`LabWork26`** → Create.
+4. В Solution Explorer правой кнопкой по решению → **Add** → **New Project** и добавь ещё 5 консольных приложений:
+   - **SimpleServer** (для 5.1.2)
+   - **SimpleClient** (для 5.1.1)
+   - **ConsoleServer** (для 5.2.2)
+   - **ConsoleClient** (для 5.2.1)
+   - **FileServer** (для 5.3.2)
+   - **FileClient** (для 5.3.1)
+
+5. **Только для FileServer**:
+   - Правой кнопкой по проекту **FileServer** → **Manage NuGet Packages**.
+   - Установи пакет **`System.Drawing.Common`** (именно он нужен для `Bitmap` и `Graphics`).
+
+### 1. Простое клиент-серверное приложение (5.1)
+
+**SimpleServer.csproj** (сервер отправляет сообщение каждые 5 секунд)
+
+```csharp
+using System;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+
+namespace SimpleServer
+{
+    class Program
+    {
+        private const int Port = 8888;
+
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== ПРОСТОЙ СЕРВЕР (5.1.2) ===");
+            TcpListener listener = new TcpListener(IPAddress.Any, Port);
+            listener.Start();
+            Console.WriteLine($"Сервер запущен на порту {Port}. Ожидание клиента...");
+
+            // 5.1.2 — Ожидаем подключение клиента
+            TcpClient client = listener.AcceptTcpClient();
+            Console.WriteLine("Клиент подключился!");
+
+            NetworkStream stream = client.GetStream();
+
+            while (true)
+            {
+                // Формируем сообщение
+                string message = $"Привет от сервера! Текущее время: {DateTime.Now:HH:mm:ss}";
+                byte[] data = Encoding.UTF8.GetBytes(message);
+
+                try
+                {
+                    stream.Write(data, 0, data.Length);     // отправляем
+                    Console.WriteLine($"Отправлено: {message}");
+                }
+                catch
+                {
+                    Console.WriteLine("Клиент отключился.");
+                    break;
+                }
+
+                Thread.Sleep(5000); // 5 секунд (5.1.2)
+            }
+
+            listener.Stop();
+        }
+    }
+}
+```
+
+**SimpleClient.csproj** (клиент читает данные из потока)
+
+```csharp
+using System;
+using System.Net.Sockets;
+using System.Text;
+
+namespace SimpleClient
+{
+    class Program
+    {
+        private const string ServerIp = "127.0.0.1";
+        private const int Port = 8888;
+
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== ПРОСТОЙ КЛИЕНТ (5.1.1) ===");
+            TcpClient client = new TcpClient(ServerIp, Port);
+            Console.WriteLine("Подключились к серверу!");
+
+            NetworkStream stream = client.GetStream();
+            byte[] buffer = new byte[1024];
+
+            while (true)
+            {
+                try
+                {
+                    int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                    if (bytesRead == 0) break;
+
+                    string message = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    Console.WriteLine($"Получено от сервера: {message}");
+                }
+                catch
+                {
+                    Console.WriteLine("Соединение закрыто.");
+                    break;
+                }
+            }
+
+            client.Close();
+        }
+    }
+}
+```
+
+**Как запускать 5.1:**  
+1. Запусти **SimpleServer**.  
+2. Запусти **SimpleClient**.  
+Каждые 5 секунд в клиенте будет появляться сообщение.
+
+### 2. Многопользовательское приложение (5.2)
+
+**ConsoleServer.csproj** (сервер принимает нескольких клиентов)
+
+```csharp
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+
+namespace ConsoleServer
+{
+    class Program
+    {
+        private const int Port = 9999;
+        private static readonly List<TcpClient> clients = new List<TcpClient>();
+
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== МНОГОПОЛЬЗОВАТЕЛЬСКИЙ СЕРВЕР (5.2.2) ===");
+            TcpListener listener = new TcpListener(IPAddress.Any, Port);
+            listener.Start();
+            Console.WriteLine($"Сервер запущен на порту {Port}.");
+
+            while (true)
+            {
+                TcpClient client = listener.AcceptTcpClient();
+                clients.Add(client);
+                Thread clientThread = new Thread(() => HandleClient(client));
+                clientThread.Start();
+            }
+        }
+
+        private static void HandleClient(TcpClient client)
+        {
+            string clientName = "Неизвестный";
+            NetworkStream stream = client.GetStream();
+            byte[] buffer = new byte[1024];
+
+            try
+            {
+                // 5.2.1 — Сначала читаем имя пользователя
+                int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                clientName = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+
+                Console.WriteLine($"Клиент подключился: {clientName}");
+
+                while (true)
+                {
+                    bytesRead = stream.Read(buffer, 0, buffer.Length);
+                    if (bytesRead == 0) break;
+
+                    string text = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+                    string time = DateTime.Now.ToString("HH:mm:ss dd.MM.yyyy"); // формат по лабораторной
+
+                    // 5.2.2 — Выводим на сервере: (Имя) чч:мм:сс дд.мм.гггг : текст
+                    Console.WriteLine($"({clientName}) {time} : {text}");
+                }
+            }
+            catch { }
+            finally
+            {
+                client.Close();
+                clients.Remove(client);
+            }
+        }
+    }
+}
+```
+
+**ConsoleClient.csproj** (клиент отправляет имя + текст)
+
+```csharp
+using System;
+using System.Net.Sockets;
+using System.Text;
+
+namespace ConsoleClient
+{
+    class Program
+    {
+        private const string ServerIp = "127.0.0.1";
+        private const int Port = 9999;
+
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== КЛИЕНТ (5.2.1) ===");
+            TcpClient client = new TcpClient(ServerIp, Port);
+            NetworkStream stream = client.GetStream();
+
+            Console.Write("Введите ваше имя: ");
+            string name = Console.ReadLine() ?? "Аноним";
+            byte[] nameData = Encoding.UTF8.GetBytes(name);
+            stream.Write(nameData, 0, nameData.Length);   // отправляем имя один раз
+
+            Console.WriteLine("Введите текст (пустая строка — выход):");
+
+            while (true)
+            {
+                string text = Console.ReadLine();
+                if (string.IsNullOrEmpty(text)) break;
+
+                byte[] data = Encoding.UTF8.GetBytes(text);
+                stream.Write(data, 0, data.Length);
+            }
+
+            client.Close();
+        }
+    }
+}
+```
+
+**Как запускать 5.2:**  
+1. Запусти **ConsoleServer**.  
+2. Запусти несколько **ConsoleClient** (сколько угодно).  
+Вводи имя → текст → сервер выводит в формате `(Имя) чч:мм:сс дд.мм.гггг : текст`.
+
+### 3. Передача и сжатие изображений (5.3)
+
+**FileServer.csproj** (сервер сжимает изображение в 2 раза)
+
+```csharp
+using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
+
+namespace FileServer
+{
+    class Program
+    {
+        private const int Port = 10000;
+
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== ФАЙЛОВЫЙ СЕРВЕР (5.3.2) ===");
+            TcpListener listener = new TcpListener(IPAddress.Any, Port);
+            listener.Start();
+            Console.WriteLine($"Сервер запущен на порту {Port}.");
+
+            while (true)
+            {
+                TcpClient client = listener.AcceptTcpClient();
+                Thread thread = new Thread(() => HandleClient(client));
+                thread.Start();
+            }
+        }
+
+        private static void HandleClient(TcpClient client)
+        {
+            try
+            {
+                NetworkStream stream = client.GetStream();
+
+                // 5.3.2 — Читаем 8 байт размера файла
+                byte[] sizeBytes = new byte[8];
+                stream.ReadExactly(sizeBytes, 0, 8);
+                long fileSize = BitConverter.ToInt64(sizeBytes, 0);
+
+                // Читаем сами байты изображения
+                byte[] imageBuffer = new byte[fileSize];
+                stream.ReadExactly(imageBuffer, 0, (int)fileSize);
+
+                Console.WriteLine($"Получено изображение размером {fileSize} байт. Сжимаем...");
+
+                // Код сжатия из лабораторной (5.3.2)
+                using var inputStream = new MemoryStream(imageBuffer);
+                using var originalImage = new Bitmap(inputStream);
+
+                int newWidth = originalImage.Width / 2;
+                int newHeight = originalImage.Height / 2;
+
+                using var resizedImage = new Bitmap(newWidth, newHeight);
+                using (var graphics = Graphics.FromImage(resizedImage))
+                {
+                    graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    graphics.DrawImage(originalImage, 0, 0, newWidth, newHeight);
+                }
+
+                using var outputStream = new MemoryStream();
+                resizedImage.Save(outputStream, ImageFormat.Jpeg);
+                byte[] resizedBytes = outputStream.ToArray();
+
+                // Отправляем обратно: 8 байт размера + байты
+                byte[] resultSize = BitConverter.GetBytes((long)resizedBytes.Length);
+                stream.Write(resultSize, 0, 8);
+                stream.Write(resizedBytes, 0, resizedBytes.Length);
+
+                Console.WriteLine($"Отправлен уменьшенный файл ({resizedBytes.Length} байт)");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка: {ex.Message}");
+            }
+            finally
+            {
+                client.Close();
+            }
+        }
+    }
+}
+```
+
+**FileClient.csproj** (клиент отправляет и получает изображение)
+
+```csharp
+using System;
+using System.IO;
+using System.Net.Sockets;
+
+namespace FileClient
+{
+    class Program
+    {
+        private const string ServerIp = "127.0.0.1";
+        private const int Port = 10000;
+
+        static void Main(string[] args)
+        {
+            Console.WriteLine("=== КЛИЕНТ ДЛЯ ФАЙЛОВ (5.3.1) ===");
+            Console.Write("Введите полный путь к изображению (jpg/png): ");
+            string filePath = Console.ReadLine();
+
+            if (!File.Exists(filePath))
+            {
+                Console.WriteLine("Файл не найден!");
+                return;
+            }
+
+            byte[] imageBytes = File.ReadAllBytes(filePath);
+            long fileSize = imageBytes.Length;
+
+            TcpClient client = new TcpClient(ServerIp, Port);
+            NetworkStream stream = client.GetStream();
+
+            // 5.3.1 — Сначала 8 байт размера, потом байты
+            byte[] sizeBytes = BitConverter.GetBytes(fileSize);
+            stream.Write(sizeBytes, 0, 8);
+            stream.Write(imageBytes, 0, imageBytes.Length);
+
+            Console.WriteLine("Изображение отправлено. Ожидаем ответ от сервера...");
+
+            // Читаем ответ от сервера
+            byte[] resultSizeBytes = new byte[8];
+            stream.ReadExactly(resultSizeBytes, 0, 8);
+            long resultSize = BitConverter.ToInt64(resultSizeBytes, 0);
+
+            byte[] resizedBytes = new byte[resultSize];
+            stream.ReadExactly(resizedBytes, 0, (int)resultSize);
+
+            // Сохраняем полученный уменьшенный файл
+            string savedPath = "resized_" + Path.GetFileNameWithoutExtension(filePath) + ".jpg";
+            File.WriteAllBytes(savedPath, resizedBytes);
+
+            Console.WriteLine($"Готово! Уменьшенное изображение сохранено как: {savedPath}");
+            client.Close();
+        }
+    }
+}
+```
+
+**Как запускать 5.3:**  
+1. Запусти **FileServer**.  
+2. Запусти **FileClient**, укажи путь к картинке (например `C:\test.jpg`).  
+Сервер сожмёт в 2 раза и вернёт — клиент сохранит файл `resized_test.jpg`.
+
+---
+
+**Всё готово по лабораторной!**  
+Запускай серверы первыми, потом клиентов. Всё работает на `127.0.0.1`.  
+
+Если нужно подробное объяснение кода прямо внутри (как в предыдущей лабе) или контрольные вопросы — просто скажи 
+
+
+
+
+
+
+**Ответы на контрольные вопросы:**
+
+**8.1** Какие элементы позволяют ввести текстовые значения?  
+`OutlinedTextField` (или `TextField`) — основные элементы для ввода текста в Jetpack Compose.
+
+**8.2** Как настроить тип клавиатуры?  
+Через параметр `keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.XXX)`, где XXX — `Text`, `Password`, `Number`, `Phone`, `Email`, `Uri` и др.
+
+**8.3** Как связать значение из элемента управления с переменной?  
+С помощью `mutableStateOf()` и двух параметров:  
+`value = переменная`, `onValueChange = { переменная = it }`.
+
+**8.4** Для чего используется combobox, какие его основные настройки?  
+Combobox (в Compose — `ExposedDropdownMenuBox`) используется для выбора одного значения из раскрывающегося списка.  
+Основные настройки: `expanded`, `onExpandedChange`, `TextField` для отображения выбранного значения, `DropdownMenu` + `DropdownMenuItem`.
+
+**8.5** Для чего используется radiobutton, какие его основные настройки?  
+`RadioButton` используется для выбора **одного** варианта из группы.  
+Основные настройки: `selected`, `onClick`. Для клика по всей строке добавляют `Modifier.selectable()`.
+
+**8.6** Для чего используется slider, какие его основные настройки?  
+`Slider` используется для выбора числового значения в заданном диапазоне (например, размер шрифта).  
+Основные настройки: `value`, `onValueChange`, `valueRange`, `steps`.
+
+**8.7** Для чего используется switch, какие его основные настройки?  
+`Switch` — переключатель «вкл/выкл» (boolean).  
+Основные настройки: `checked`, `onCheckedChange`.
+
+Готово! Можно сразу копировать в отчёт (раздел 7.3).
